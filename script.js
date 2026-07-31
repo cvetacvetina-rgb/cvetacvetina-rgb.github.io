@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с правильным URL для Render)
+// script.js — логика UMAR (с правильным URL для GitHub Pages)
 (function() {
     'use strict';
 
@@ -19,13 +19,14 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== ПРАВИЛЬНЫЙ URL ДЛЯ RENDER ==========
-    // Render автоматически даёт HTTPS, но иногда бывают проблемы с SSL
-    // Используем HTTP (безопасно для разработки)
+    // ========== ПРАВИЛЬНЫЙ URL ДЛЯ GITHUB PAGES ==========
+    // Ваш фронтенд на GitHub Pages
+    const FRONTEND_URL = 'https://cvetacvetina-rgb.github.io';
+    
+    // Бэкенд на Render (HTTP, чтобы избежать SSL ошибок)
     const API_URL = 'http://cvetavetina-rgb.github.io.onrender.com';
-    // Для HTTPS (если заработает):
-    // const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';
 
+    console.log('🔗 FRONTEND_URL:', FRONTEND_URL);
     console.log('🔗 API_URL:', API_URL);
 
     // ---------- ПРОВЕРКА СОЕДИНЕНИЯ С СЕРВЕРОМ ----------
@@ -814,6 +815,7 @@
     console.log('📌 Показываем шаг регистрации');
     showStep(registerStep);
     console.log('📱 UMAR готов к работе');
+    console.log('🔗 Фронтенд:', FRONTEND_URL);
     console.log('🔗 Бэкенд:', API_URL);
 
     // Проверяем соединение при загрузке
