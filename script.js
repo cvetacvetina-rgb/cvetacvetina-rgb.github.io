@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с правильным URL для GitHub Pages)
+// script.js — логика UMAR (с HTTPS для Render)
 (function() {
     'use strict';
 
@@ -19,12 +19,9 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== ПРАВИЛЬНЫЙ URL ДЛЯ GITHUB PAGES ==========
-    // Ваш фронтенд на GitHub Pages
+    // ========== ПРАВИЛЬНЫЙ URL С HTTPS ==========
     const FRONTEND_URL = 'https://cvetacvetina-rgb.github.io';
-    
-    // Бэкенд на Render (HTTP, чтобы избежать SSL ошибок)
-    const API_URL = 'http://cvetavetina-rgb.github.io.onrender.com';
+    const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com'; // ← HTTPS!
 
     console.log('🔗 FRONTEND_URL:', FRONTEND_URL);
     console.log('🔗 API_URL:', API_URL);
