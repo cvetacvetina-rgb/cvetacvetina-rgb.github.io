@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UMAR — мессенджер</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Водяной знак -->
+    <div id="watermark">Активация UMAR: Чтобы активировать UMAR, заплатити 50 халяли</div>
+
+    <!-- МОДАЛКА АВТОРИЗАЦИИ -->
+    <div id="authModal" class="modal active">
+        <div class="modal-content auth-modal">
+            <div class="modal-header">
+                <h2>UMAR</h2>
+            </div>
+            <div class="settings-body" id="authBody">
+                <!-- Телефон -->
+                <div id="authPhoneStep">
+                    <div class="form-group">
+                        <label>Номер телефона</label>
+                        <input type="tel" id="authPhone" placeholder="+7 999 123 45 67" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <button id="authRequestCodeBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Получить код</button>
+                    <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
+                        Уже есть аккаунт? <a href="#" id="switchToLogin" style="color:#FF8C00; text-decoration:none;">Войти</a>
+                    </div>
+                </div>
+
+                <!-- Код подтверждения -->
+                <div id="authCodeStep" style="display:none;">
+                    <div class="form-group">
+                        <label>Код из SMS</label>
+                        <input type="text" id="authCode" placeholder="Введите 6-значный код" maxlength="6" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <button id="authVerifyBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Подтвердить</button>
+                    <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
+                        <a href="#" id="backToPhone" style="color:#FF8C00; text-decoration:none;">← Назад</a>
+                    </div>
+                </div>
+
+                <!-- Регистрация -->
+                <div id="authRegisterStep" style="display:none;">
+                    <div class="form-group">
+                        <label>Имя</label>
+                        <input type="text" id="regName" placeholder="Ваше имя" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <div class="form-group" style="margin-top:10px;">
+                        <label>Логин (username)</label>
+                        <input type="text" id="regUsername" placeholder="username" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <div class="form-group" style="margin-top:10px;">
+                        <label>Пароль</label>
+                        <input type="password" id="regPassword" placeholder="Минимум 6 символов" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <button id="authRegisterBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Зарегистрироваться</button>
+                </div>
+
+                <!-- Логин по паролю -->
+                <div id="authLoginStep" style="display:none;">
+                    <div class="form-group">
+                        <label>Логин или телефон</label>
+                        <input type="text" id="loginUsername" placeholder="username или +7..." style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <div class="form-group" style="margin-top:10px;">
+                        <label>Пароль</label>
+                        <input type="password" id="loginPassword" placeholder="Пароль" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <button id="authLoginBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Войти</button>
+                    <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
+                        <a href="#" id="switchToRegister" style="color:#FF8C00; text-decoration:none;">Создать аккаунт</a>
+                    </div>
+                </div>
+
+                <div id="authError" style="color:#ff6b6b; margin-top:12px; display:none; text-align:center;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ОСНОВНОЙ ИНТЕРФЕЙС (скрыт до авторизации) -->
+    <div id="appContainer" class="app-container" style="display:none;">
+        <!-- Левая панель -->
+        <aside class="chats-panel" id="chatsPanel">
+            <div class="panel-header">
+                <h1>UMAR</h1>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Поиск...">
+                </div>
+            </div>
+            <div class="chat-list" id="chatList"></div>
+            <div class="panel-footer">
+                <button id="createGroupBtn" class="footer-btn">➕ Группа</button>
+                <button id="findPeopleBtn" class="footer-btn">🔍 Найти</button>
+                <button id="settingsToggle" class="footer-btn">⚙️</button>
+            </div>
+        </aside>
+
+        <!-- Правая панель -->
+        <main class="chat-panel" id="chatPanel">
+            <div class="chat-header" id="chatHeader">
+                <div class="avatar" id="headerAvatar">U</div>
+                <div class="info" id="headerInfo">
+                    <h3 id="headerName">Выберите чат</h3>
+                    <span id="headerStatus">офлайн</span>
+                </div>
+                <div class="header-actions">
+                    <button id="groupSettingsBtn" class="header-action-btn" style="display:none;">⚙️</button>
+                </div>
+            </div>
+
+            <div class="messages-area" id="messagesArea">
+                <div class="placeholder-text">👋 Нажмите на чат, чтобы начать</div>
+            </div>
+
+            <div class="input-area">
+                <button id="attachBtn" class="attach-btn">📎</button>
+                <button id="voiceBtn" class="voice-btn">🎤</button>
+                <input type="text" id="messageInput" placeholder="Сообщение..." disabled>
+                <button id="sendBtn" disabled>Отправить</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Остальные модалки (настройки, группа, поиск людей) -->
+    <!-- ... (остальные модалки из предыдущей версии) ... -->
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
