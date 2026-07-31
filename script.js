@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с правильным протоколом)
+// script.js — логика UMAR (с правильным URL для Render)
 (function() {
     'use strict';
 
@@ -19,13 +19,12 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== БЭКЕНД URL ==========
-    // ПРОБУЙТЕ ПО ОЧЕРЕДИ:
-    const API_URL = 'http://cvetavetina-rgb.github.io.onrender.com';  // ← HTTP, не HTTPS!
-    // const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';  // ← закомментируйте HTTPS
-
-    // Если не работает, попробуйте IP адрес Render:
-    // const API_URL = 'http://YOUR_RENDER_IP:3000';
+    // ========== ПРАВИЛЬНЫЙ URL ДЛЯ RENDER ==========
+    // Render автоматически даёт HTTPS, но иногда бывают проблемы с SSL
+    // Используем HTTP (безопасно для разработки)
+    const API_URL = 'http://cvetavetina-rgb.github.io.onrender.com';
+    // Для HTTPS (если заработает):
+    // const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';
 
     console.log('🔗 API_URL:', API_URL);
 
