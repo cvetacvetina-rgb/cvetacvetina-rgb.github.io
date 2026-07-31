@@ -26,6 +26,12 @@
                     </div>
 
                     <div class="form-group">
+                        <label>Телефон</label>
+                        <input type="tel" id="regPhone" placeholder="+79991234567" 
+                               style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
+                    </div>
+
+                    <div class="form-group">
                         <label>Логин</label>
                         <input type="text" id="regUsername" placeholder="Придумайте логин (мин. 3 символа)" 
                                style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
@@ -43,6 +49,12 @@
                                style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
                     </div>
 
+                    <div class="form-group">
+                        <label>Аватар (обязательно)</label>
+                        <input type="file" id="regAvatar" accept="image/*" 
+                               style="width:100%; padding:10px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:14px; cursor:pointer;">
+                    </div>
+
                     <button id="authRegisterBtn" class="auth-btn-primary">Зарегистрироваться</button>
 
                     <div class="auth-switch">
@@ -57,8 +69,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Логин</label>
-                        <input type="text" id="loginUsername" placeholder="Ваш логин" 
+                        <label>Телефон или логин</label>
+                        <input type="text" id="loginUsername" placeholder="+79991234567 или username" 
                                style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
                     </div>
 
@@ -72,16 +84,6 @@
 
                     <div class="auth-switch">
                         Нет аккаунта? <a href="#" id="switchToRegister" style="color:#FF8C00; text-decoration:none;">Зарегистрироваться</a>
-                    </div>
-
-                    <div style="margin-top:16px; padding:12px; background:#1a1a1a; border-radius:12px; border:1px solid #2a2a2a;">
-                        <div style="color:#888; font-size:12px; text-align:center; margin-bottom:8px;">Тестовые аккаунты:</div>
-                        <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center; font-size:13px; color:#aaa;">
-                            <span style="background:#252525; padding:4px 10px; border-radius:6px;">anna / 123456</span>
-                            <span style="background:#252525; padding:4px 10px; border-radius:6px;">bob / 123456</span>
-                            <span style="background:#252525; padding:4px 10px; border-radius:6px;">elena / 123456</span>
-                            <span style="background:#252525; padding:4px 10px; border-radius:6px;">mike / 123456</span>
-                        </div>
                     </div>
                 </div>
 
