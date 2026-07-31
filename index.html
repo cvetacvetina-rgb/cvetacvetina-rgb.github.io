@@ -26,12 +26,6 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Телефон</label>
-                        <input type="tel" id="regPhone" placeholder="+79991234567" 
-                               style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
-                    </div>
-
-                    <div class="form-group">
                         <label>Логин</label>
                         <input type="text" id="regUsername" placeholder="Придумайте логин (мин. 3 символа)" 
                                style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
@@ -69,8 +63,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Телефон или логин</label>
-                        <input type="text" id="loginUsername" placeholder="+79991234567 или username" 
+                        <label>Логин</label>
+                        <input type="text" id="loginUsername" placeholder="Ваш логин" 
                                style="width:100%; padding:14px; border-radius:14px; border:1px solid #333; background:#111; color:#fff; font-size:16px;">
                     </div>
 
@@ -118,6 +112,7 @@
                 </div>
                 <div class="header-actions">
                     <button id="groupSettingsBtn" class="header-action-btn" style="display:none;">⚙️</button>
+                    <button id="profileBtn" class="header-action-btn">👤</button>
                 </div>
             </div>
 
@@ -132,6 +127,41 @@
                 <button id="sendBtn" disabled>Отправить</button>
             </div>
         </main>
+    </div>
+
+    <!-- ===== МОДАЛКА ПРОФИЛЯ ===== -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content" style="max-width:380px;">
+            <div class="modal-header">
+                <h2>Профиль</h2>
+                <button id="closeProfile" class="close-btn">&times;</button>
+            </div>
+            <div class="settings-body" id="profileBody">
+                <div style="text-align:center; margin-bottom:16px;">
+                    <div id="profileAvatar" style="width:80px; height:80px; border-radius:50%; margin:0 auto; background:#2a2a2a; display:flex; align-items:center; justify-content:center; font-size:32px; color:white;">👤</div>
+                </div>
+                <div class="form-group">
+                    <label>ID</label>
+                    <div id="profileId" style="color:#FF8C00; font-weight:600; font-size:18px; padding:8px; background:#1a1a1a; border-radius:8px; text-align:center;">00001</div>
+                </div>
+                <div class="form-group">
+                    <label>Имя</label>
+                    <div id="profileName" style="padding:8px; background:#1a1a1a; border-radius:8px;">Имя</div>
+                </div>
+                <div class="form-group">
+                    <label>Логин</label>
+                    <div id="profileUsername" style="padding:8px; background:#1a1a1a; border-radius:8px;">@username</div>
+                </div>
+                <div class="form-group">
+                    <label>Статус</label>
+                    <div id="profileStatus" style="padding:8px; background:#1a1a1a; border-radius:8px;">🟢 онлайн</div>
+                </div>
+                <div class="form-group">
+                    <label>О себе</label>
+                    <div id="profileBio" style="padding:8px; background:#1a1a1a; border-radius:8px;">Новый пользователь</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Остальные модалки -->
