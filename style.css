@@ -1,4 +1,4 @@
-/* style.css — UMAR мессенджер (исправленная версия) */
+/* style.css — UMAR мессенджер */
 * {
     margin: 0;
     padding: 0;
@@ -429,7 +429,7 @@ body.light-theme .form-group select { background: #f0f0f0; border-color: #ccc; c
     overflow-y: auto;
 }
 
-/* ===== АВТОРИЗАЦИЯ (исправленная) ===== */
+/* ===== АВТОРИЗАЦИЯ ===== */
 .auth-modal {
     max-width: 400px;
     background: #1a1a1a;
@@ -487,29 +487,6 @@ body.light-theme .form-group select { background: #f0f0f0; border-color: #ccc; c
     color: #555;
 }
 
-.auth-method-btn {
-    flex: 1;
-    padding: 12px;
-    background: #252525;
-    border: 1px solid #333;
-    border-radius: 12px;
-    color: #aaa;
-    cursor: pointer;
-    font-size: 14px;
-    transition: 0.2s;
-    font-weight: 500;
-}
-.auth-method-btn:hover {
-    background: #333;
-    border-color: #FF8C00;
-    color: #fff;
-}
-.auth-method-btn.active {
-    border-color: #FF8C00;
-    color: #fff;
-    background: #2a2a2a;
-}
-
 .auth-btn-primary {
     width: 100%;
     padding: 14px;
@@ -526,47 +503,6 @@ body.light-theme .form-group select { background: #f0f0f0; border-color: #ccc; c
 .auth-btn-primary:hover {
     background: #e67e00;
     transform: scale(0.98);
-}
-
-.auth-btn-google {
-    width: 100%;
-    padding: 12px;
-    background: #4285F4;
-    border: none;
-    border-radius: 14px;
-    color: #fff;
-    font-weight: 600;
-    font-size: 16px;
-    cursor: pointer;
-    transition: 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-.auth-btn-google:hover {
-    background: #3367d6;
-    transform: scale(0.98);
-}
-.auth-btn-google .google-icon {
-    font-size: 20px;
-    font-weight: 700;
-}
-
-.auth-divider {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin: 16px 0;
-    color: #555;
-    font-size: 13px;
-}
-.auth-divider::before,
-.auth-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: #333;
 }
 
 .auth-switch {
@@ -593,33 +529,6 @@ body.light-theme .form-group select { background: #f0f0f0; border-color: #ccc; c
     background: #2a1a1a;
     border-radius: 10px;
     font-size: 14px;
-}
-
-.code-display {
-    text-align: center;
-    color: #FF8C00;
-    font-size: 20px;
-    font-weight: 700;
-    margin: 8px 0 12px;
-    padding: 12px;
-    background: #1a1a1a;
-    border-radius: 12px;
-    border: 1px dashed #FF8C00;
-    display: none;
-}
-.code-display .code-number {
-    font-size: 28px;
-    letter-spacing: 4px;
-}
-
-.auth-contact-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 4px;
-}
-.auth-contact-row .form-group {
-    flex: 1;
-    margin-bottom: 0;
 }
 
 /* ===== ОСТАЛЬНЫЕ МОДАЛКИ ===== */
@@ -758,7 +667,6 @@ body.light-theme .form-group select { background: #f0f0f0; border-color: #ccc; c
     .message-bubble { max-width: 85%; }
     #watermark { font-size: 11px; max-width: 200px; bottom: 6px; right: 8px; }
     .auth-modal { max-width: 95%; }
-    .auth-contact-row { flex-direction: column; gap: 6px; }
 }
 
 @media (max-width: 480px) {
