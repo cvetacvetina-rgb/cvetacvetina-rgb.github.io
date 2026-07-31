@@ -391,4 +391,303 @@
         const chat = chats.find(c => c.id === chatId);
         if (!chat) return;
         activeChatId = chatId;
-       
+        chat.unread = 0;
+        messageInput.disabled = false;
+        sendBtn.disabled = false;
+        messageInput.focus();
+        renderChatList();
+        renderMessages(chatId);
+    }
+
+    // ---------- ОТПРАВКА СООБЩЕНИЯ (с активационным текстом) ----------
+    function sendMessage(text, file = null, voiceBlob = null) {
+        if (!activeChatId) return;
+        const chat = chats.find(c => c.id === activeChatId);
+        if (!chat) return;
+
+        let finalText = text || '';
+        if (finalText.trim() === '' && !file && !voiceBlob) return;
+
+        const now = new Date();
+        const timeStr = now.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+        let msgObj = { id: Date.now().toString(), time: timeStr, type: 'sent', senderId: currentUser.id };
+
+        if (voiceBlob) {
+            const url = URL.createObjectURL(voiceBlob);
+            msgObj.voice = url;
+            msgObj.text = '🎤 Голосовое сообщение';
+        } else if (file) {
+            msgObj.text = `📎 ${file}`;
+            msgObj.file = file;
+        } else {
+            // ===== АКТИВАЦИОННЫЙ ТЕКСТ НА НОВОЙ СТРОКЕ ДЛЯ МОИХ СООБЩЕНИЙ =====
+            if (!finalText.includes('Активация UMAR')) {
+                finalText = finalText + '\nАктивация UMAR: Чтобы активировать UMAR, заплатити 50 халяли';
+            }
+            msgObj.text = finalText;
+        }
+
+        chat.messages.push(msgObj);
+        renderMessages(activeChatId);
+        renderChatList();
+
+        // Отправка на сервер через Socket.IO
+        socket.emit('send_message', {
+            chatId: chat.id,
+            senderId: currentUser.id,
+            text: msgObj.text,
+            file: file,
+            voice: voiceBlob ? 'voice' : null
+        });
+
+        // Автоответ Матвея (только в группах)
+        if (chat.isGroup && chat.members.includes('matvey')) {
+            setTimeout(() => {
+                const spam = [
+                    '777 СТАВОК КАЗИНО! ПЫЧОК МАТВЕЙ ОТКРЫЛ НОВОЕ КАЗИНО! ПЫК!',
+                    'БАЙТЕРАМ ВСЕМ ПРИВЕТ! 18+ ТОЛЬКО У НАС! ССЫЛКА В ОПИСАНИИ!',
+                    'МАТВЕЙ ЗОВЁТ ТЕБЯ В НОВЫЙ КЛУБ! ПЫК ПЫК 777!',
+                    'ВСЕ НА КАЗИНО МАТВЕЯ! БОНУС 777% НА ПЕРВЫЙ ДЕПОЗИТ!',
+                    'ТЫ ЧЁ, НЕ ХОЧЕШЬ СТАТЬ МИЛЛИОНЕРОМ? ПЫЧОК МАТВЕЙ ПОМОЖЕТ!'
+                ];
+                const reply = spam[Math.floor(Math.random() * spam.length)];
+                const replyTime = new Date().toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                chat.messages.push({
+                    id: Date.now().toString() + 'm',
+                    text: reply,
+                    time: replyTime,
+                    type: 'received',
+                    senderId: 'matvey'
+                });
+                renderMessages(activeChatId);
+                renderChatList();
+            }, 2000 + Math.random() * 3000);
+        }
+    }
+
+    // ---------- ОБРАБОТЧИКИ ----------
+    const chatListEl = document.getElementById('chatList');
+    const messagesArea = document.getElementById('messagesArea');
+    const headerName = document.getElementById('headerName');
+    const headerStatus = document.getElementById('headerStatus');
+    const headerAvatar = document.getElementById('headerAvatar');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const searchInput = document.getElementById('searchInput');
+    const settingsToggle = document.getElementById('settingsToggle');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettings = document.getElementById('closeSettings');
+    const themeSwitch = document.getElementById('themeSwitch');
+    const attachBtn = document.getElementById('attachBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const createGroupBtn = document.getElementById('createGroupBtn');
+    const groupModal = document.getElementById('groupModal');
+    const closeGroupModal = document.getElementById('closeGroupModal');
+    const groupNameInput = document.getElementById('groupNameInput');
+    const groupMembersList = document.getElementById('groupMembersList');
+    const createGroupConfirm = document.getElementById('createGroupConfirm');
+    const groupSettingsBtn = document.getElementById('groupSettingsBtn');
+
+    // Отправка сообщения
+    sendBtn.addEventListener('click', () => {
+        const text = messageInput.value.trim();
+        if (text) {
+            sendMessage(text);
+            messageInput.value = '';
+        }
+    });
+
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendBtn.click();
+        }
+    });
+
+    // Поиск
+    searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value;
+        renderChatList();
+    });
+
+    // Настройки
+    settingsToggle.addEventListener('click', () => settingsModal.classList.add('active'));
+    closeSettings.addEventListener('click', () => settingsModal.classList.remove('active'));
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) settingsModal.classList.remove('active');
+    });
+
+    // Тема
+    themeSwitch.addEventListener('change', function() {
+        if (!this.checked) {
+            alert('Ты что, расист?');
+            this.checked = true;
+            return;
+        }
+        document.body.classList.remove('light-theme');
+    });
+
+    // Файлы
+    attachBtn.addEventListener('click', () => {
+        if (!activeChatId) return;
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,audio/*,video/*,.pdf,.doc,.docx,.txt';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) sendMessage('', file.name, null);
+        };
+        input.click();
+    });
+
+    // Голос
+    let isRecording = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+
+    voiceBtn.addEventListener('click', async () => {
+        if (!activeChatId) {
+            alert('Сначала выберите чат');
+            return;
+        }
+        if (isRecording) {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+            voiceBtn.classList.remove('recording');
+            voiceBtn.textContent = '🎤';
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                if (audioBlob.size > 0) sendMessage('', null, audioBlob);
+                stream.getTracks().forEach(track => track.stop());
+                isRecording = false;
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤';
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            voiceBtn.classList.add('recording');
+            voiceBtn.textContent = '⏹️';
+        } catch (err) {
+            alert('Не удалось получить доступ к микрофону: ' + err.message);
+        }
+    });
+
+    // ---------- ГРУППЫ ----------
+    createGroupBtn.addEventListener('click', async () => {
+        groupModal.classList.add('active');
+        const res = await fetch(`${API_URL}/api/users`);
+        const users = await res.json();
+        groupMembersList.innerHTML = '';
+        users.forEach(u => {
+            if (u.id !== currentUser.id && u.id !== 'matvey') {
+                const div = document.createElement('div');
+                div.className = 'member-checkbox';
+                div.innerHTML = `
+                    <input type="checkbox" value="${u.id}">
+                    <span>${u.name} (@${u.username})</span>
+                `;
+                groupMembersList.appendChild(div);
+            }
+        });
+        // Матвей всегда добавлен в группы
+        const div = document.createElement('div');
+        div.className = 'member-checkbox';
+        div.innerHTML = `
+            <input type="checkbox" checked disabled>
+            <span>Матвей (обязательный)</span>
+        `;
+        groupMembersList.appendChild(div);
+        groupNameInput.value = '';
+    });
+
+    closeGroupModal.addEventListener('click', () => groupModal.classList.remove('active'));
+    groupModal.addEventListener('click', (e) => {
+        if (e.target === groupModal) groupModal.classList.remove('active');
+    });
+
+    createGroupConfirm.addEventListener('click', async () => {
+        const name = groupNameInput.value.trim() || 'Новая группа';
+        const checkboxes = groupMembersList.querySelectorAll('input[type="checkbox"]:checked');
+        const members = [currentUser.id];
+        checkboxes.forEach(cb => {
+            if (cb.value) members.push(cb.value);
+        });
+        if (!members.includes('matvey')) members.push('matvey');
+
+        if (members.length < 3) {
+            alert('В группе должно быть минимум 3 участника (включая вас и Матвея)');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/api/chats`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    isGroup: true,
+                    members: members,
+                    creatorId: currentUser.id
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                groupModal.classList.remove('active');
+                await loadChats();
+                renderChatList();
+                const newChat = chats.find(c => c.id === data.chatId);
+                if (newChat) openChat(newChat.id);
+            }
+        } catch (err) {
+            alert('Ошибка создания группы: ' + err.message);
+        }
+    });
+
+    // ---------- НАСТРОЙКИ ГРУППЫ ----------
+    groupSettingsBtn.addEventListener('click', () => {
+        if (!activeChatId) return;
+        const chat = chats.find(c => c.id === activeChatId);
+        if (!chat || !chat.isGroup) return;
+        openGroupSettings(chat);
+    });
+
+    function openGroupSettings(chat) {
+        const newName = prompt('Название группы:', chat.name);
+        if (newName && newName.trim()) {
+            fetch(`${API_URL}/api/chats/${chat.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() })
+            }).then(() => {
+                chat.name = newName.trim();
+                renderChatList();
+                renderMessages(activeChatId);
+            });
+        }
+    }
+
+    // ---------- ОТКРЫТЬ ПЕРВЫЙ ЧАТ ----------
+    function openDefaultChat() {
+        if (chats.length > 0) {
+            openChat(chats[0].id);
+        }
+    }
+
+    // ---------- ЗАПУСК ----------
+    showStep(registerStep);
+    console.log('📱 UMAR готов к работе');
+    console.log('🔗 Бэкенд:', API_URL);
+})();
