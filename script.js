@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с отладкой)
+// script.js — логика UMAR (с правильным URL и проверкой соединения)
 (function() {
     'use strict';
 
@@ -19,10 +19,26 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== БЭКЕНД ==========
+    // ========== БЭКЕНД URL ==========
+    // Попробуйте оба варианта:
     const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';
+    // const API_URL = 'http://localhost:3000'; // для локальной разработки
 
     console.log('🔗 API_URL:', API_URL);
+
+    // ---------- ПРОВЕРКА СОЕДИНЕНИЯ С СЕРВЕРОМ ----------
+    async function testConnection() {
+        try {
+            console.log('🔄 Проверка соединения с сервером...');
+            const res = await fetch(`${API_URL}/api/users`);
+            console.log('✅ Сервер доступен, статус:', res.status);
+            return true;
+        } catch (err) {
+            console.error('❌ Сервер НЕДОСТУПЕН:', err.message);
+            showError('Не удалось подключиться к серверу. Проверьте URL: ' + API_URL);
+            return false;
+        }
+    }
 
     // ---------- ПЕРЕКЛЮЧЕНИЕ ШАГОВ ----------
     function showStep(step) {
@@ -42,6 +58,10 @@
         registerBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             console.log('🖱️ Клик по кнопке регистрации');
+
+            // Проверяем соединение перед отправкой
+            const isConnected = await testConnection();
+            if (!isConnected) return;
 
             const username = document.getElementById('regUsername').value.trim();
             const name = document.getElementById('regName').value.trim() || username;
@@ -102,7 +122,7 @@
                 }
             } catch (err) {
                 console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
+                showError('Ошибка соединения с сервером: ' + err.message + '\nПроверьте URL: ' + API_URL);
             }
         });
     } else {
@@ -117,6 +137,10 @@
         loginBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             console.log('🖱️ Клик по кнопке входа');
+
+            // Проверяем соединение перед отправкой
+            const isConnected = await testConnection();
+            if (!isConnected) return;
 
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
@@ -154,7 +178,7 @@
                 }
             } catch (err) {
                 console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
+                showError('Ошибка соединения с сервером: ' + err.message + '\nПроверьте URL: ' + API_URL);
             }
         });
     } else {
@@ -162,22 +186,36 @@
     }
 
     // Enter для отправки форм
-    document.getElementById('regPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authRegisterBtn').click();
-    });
-    document.getElementById('loginPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authLoginBtn').click();
-    });
+    const regPassword = document.getElementById('regPassword');
+    if (regPassword) {
+        regPassword.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('authRegisterBtn').click();
+        });
+    }
+
+    const loginPassword = document.getElementById('loginPassword');
+    if (loginPassword) {
+        loginPassword.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('authLoginBtn').click();
+        });
+    }
 
     // Переключение между регистрацией и входом
-    document.getElementById('switchToLogin').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(loginStep);
-    });
-    document.getElementById('switchToRegister').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(registerStep);
-    });
+    const switchToLogin = document.getElementById('switchToLogin');
+    if (switchToLogin) {
+        switchToLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            showStep(loginStep);
+        });
+    }
+
+    const switchToRegister = document.getElementById('switchToRegister');
+    if (switchToRegister) {
+        switchToRegister.addEventListener('click', (e) => {
+            e.preventDefault();
+            showStep(registerStep);
+        });
+    }
 
     function showError(msg) {
         console.log('⚠️ Ошибка:', msg);
@@ -192,14 +230,25 @@
     // ---------- ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ----------
     async function initApp() {
         console.log('🚀 Инициализация приложения...');
-        socket = io(API_URL, { query: { userId: currentUser.id } });
-        await loadChats();
-        await loadContacts();
-        setupSocket();
-        renderChatList();
-        openDefaultChat();
-        document.getElementById('findPeopleBtn').addEventListener('click', openFindPeople);
-        console.log('✅ Приложение готово!');
+        try {
+            socket = io(API_URL, { 
+                query: { userId: currentUser.id },
+                transports: ['websocket', 'polling']
+            });
+            await loadChats();
+            await loadContacts();
+            setupSocket();
+            renderChatList();
+            openDefaultChat();
+            const findPeopleBtn = document.getElementById('findPeopleBtn');
+            if (findPeopleBtn) {
+                findPeopleBtn.addEventListener('click', openFindPeople);
+            }
+            console.log('✅ Приложение готово!');
+        } catch (err) {
+            console.error('❌ Ошибка инициализации:', err);
+            showError('Ошибка инициализации: ' + err.message);
+        }
     }
 
     function setupSocket() {
@@ -764,5 +813,8 @@
     showStep(registerStep);
     console.log('📱 UMAR готов к работе');
     console.log('🔗 Бэкенд:', API_URL);
+
+    // Проверяем соединение при загрузке
+    testConnection();
 
 })();
