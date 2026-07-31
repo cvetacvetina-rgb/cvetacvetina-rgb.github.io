@@ -1,6 +1,7 @@
-// server.js — бэкенд UMAR (с правильным CORS)
+// server.js — бэкенд UMAR (с правильным CORS для HTTPS)
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const socketIO = require('socket.io');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
@@ -11,36 +12,41 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const server = http.createServer(app);
 
 // ========== НАСТРОЙКА CORS (ВАЖНО!) ==========
 const corsOptions = {
-    origin: '*', // Разрешаем все источники
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Разрешаем preflight запросы
-
-const io = socketIO(server, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
-});
+app.options('*', cors(corsOptions));
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
-// Логирование запросов (для отладки)
+// Логирование запросов
 app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.url}`);
     next();
+});
+
+// ========== СОЗДАЁМ СЕРВЕР ==========
+// Render автоматически даёт HTTPS через reverse proxy
+// Используем обычный HTTP сервер, Render обернёт его в HTTPS
+const server = http.createServer(app);
+
+const io = socketIO(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+        credentials: true,
+        transports: ['websocket', 'polling']
+    }
 });
 
 // Настройка multer для аватаров
@@ -55,6 +61,7 @@ const storage = multer.diskStorage({
         cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     }
 });
+
 const upload = multer({ 
     storage, 
     limits: { fileSize: 5 * 1024 * 1024 },
@@ -527,8 +534,13 @@ io.on('connection', (socket) => {
 
 // ---------- ЗАПУСК ----------
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+
+// На Render используется обычный HTTP сервер
+// Render автоматически добавляет HTTPS
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 UMAR сервер запущен на порту ${PORT}`);
-    console.log(`🌐 API доступен по адресу: http://localhost:${PORT}`);
+    console.log(`🌐 HTTP: http://localhost:${PORT}`);
+    console.log(`🌐 HTTPS: https://ваш-сервер.onrender.com (через Render)`);
     console.log(`👤 Матвей создан (только в группах)`);
+    console.log(`📋 CORS разрешён для всех источников`);
 });
