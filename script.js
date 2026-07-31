@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с HTTPS для Render)
+// script.js — логика UMAR
 (function() {
     'use strict';
 
@@ -19,11 +19,9 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== ПРАВИЛЬНЫЙ URL С HTTPS ==========
-    const FRONTEND_URL = 'https://cvetacvetina-rgb.github.io';
-    const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com'; // ← HTTPS!
+    // ========== ПРАВИЛЬНЫЙ URL ==========
+    const API_URL = 'https://cvetacvetina-rgb-github-io.onrender.com';
 
-    console.log('🔗 FRONTEND_URL:', FRONTEND_URL);
     console.log('🔗 API_URL:', API_URL);
 
     // ---------- ПРОВЕРКА СОЕДИНЕНИЯ С СЕРВЕРОМ ----------
@@ -59,7 +57,6 @@
             e.preventDefault();
             console.log('🖱️ Клик по кнопке регистрации');
 
-            // Проверяем соединение перед отправкой
             const isConnected = await testConnection();
             if (!isConnected) return;
 
@@ -122,7 +119,7 @@
                 }
             } catch (err) {
                 console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message + '\nПроверьте URL: ' + API_URL);
+                showError('Ошибка соединения с сервером: ' + err.message);
             }
         });
     } else {
@@ -138,7 +135,6 @@
             e.preventDefault();
             console.log('🖱️ Клик по кнопке входа');
 
-            // Проверяем соединение перед отправкой
             const isConnected = await testConnection();
             if (!isConnected) return;
 
@@ -178,7 +174,7 @@
                 }
             } catch (err) {
                 console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message + '\nПроверьте URL: ' + API_URL);
+                showError('Ошибка соединения с сервером: ' + err.message);
             }
         });
     } else {
@@ -812,7 +808,6 @@
     console.log('📌 Показываем шаг регистрации');
     showStep(registerStep);
     console.log('📱 UMAR готов к работе');
-    console.log('🔗 Фронтенд:', FRONTEND_URL);
     console.log('🔗 Бэкенд:', API_URL);
 
     // Проверяем соединение при загрузке
