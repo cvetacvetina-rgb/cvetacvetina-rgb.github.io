@@ -1,4 +1,4 @@
-// script.js — логика UMAR (с правильным URL и проверкой соединения)
+// script.js — логика UMAR (с правильным протоколом)
 (function() {
     'use strict';
 
@@ -20,9 +20,12 @@
     const loginStep = document.getElementById('authLoginStep');
 
     // ========== БЭКЕНД URL ==========
-    // Попробуйте оба варианта:
-    const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';
-    // const API_URL = 'http://localhost:3000'; // для локальной разработки
+    // ПРОБУЙТЕ ПО ОЧЕРЕДИ:
+    const API_URL = 'http://cvetavetina-rgb.github.io.onrender.com';  // ← HTTP, не HTTPS!
+    // const API_URL = 'https://cvetavetina-rgb.github.io.onrender.com';  // ← закомментируйте HTTPS
+
+    // Если не работает, попробуйте IP адрес Render:
+    // const API_URL = 'http://YOUR_RENDER_IP:3000';
 
     console.log('🔗 API_URL:', API_URL);
 
