@@ -1,4 +1,4 @@
-// server.js — бэкенд UMAR с реальной регистрацией (телефон + username + пароль + аватар)
+// server.js — бэкенд UMAR с ID пользователя (без телефона)
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
@@ -54,11 +54,10 @@ const upload = multer({
 const db = new sqlite3.Database('./umar.db');
 
 db.serialize(() => {
-    // Таблица пользователей (с телефоном)
+    // Таблица пользователей (без телефона, с user_id)
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
-            phone TEXT UNIQUE,
             username TEXT UNIQUE,
             password TEXT,
             name TEXT,
@@ -119,16 +118,15 @@ db.serialize(() => {
         )
     `);
 
-    // СОЗДАЁМ ТОЛЬКО МАТВЕЯ (без тестовых аккаунтов)
+    // СОЗДАЁМ ТОЛЬКО МАТВЕЯ
     db.get('SELECT * FROM users WHERE id = ?', ['matvey'], (err, row) => {
         if (!row) {
             const hashedPass = bcrypt.hashSync('matvey123', 10);
             db.run(`
-                INSERT INTO users (id, phone, username, password, name, avatar, bio, is_online, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (id, username, password, name, avatar, bio, is_online, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 'matvey',
-                '+79999999999',
                 'matvey',
                 hashedPass,
                 'Матвей',
@@ -141,14 +139,23 @@ db.serialize(() => {
     });
 });
 
+// ---------- ГЕНЕРАЦИЯ ID ПОЛЬЗОВАТЕЛЯ ----------
+function generateUserId(callback) {
+    db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
+        if (err) return callback(err);
+        const count = row.count + 1;
+        const userId = String(count).padStart(5, '0');
+        callback(null, userId);
+    });
+}
+
 // ---------- API ЭНДПОИНТЫ ----------
 
-// 1. РЕГИСТРАЦИЯ (телефон + username + пароль + аватар)
+// 1. РЕГИСТРАЦИЯ (username + пароль + аватар, без телефона)
 app.post('/api/auth/register', upload.single('avatar'), async (req, res) => {
-    const { phone, username, password, name } = req.body;
+    const { username, password, name } = req.body;
 
     // Проверка обязательных полей
-    if (!phone) return res.status(400).json({ error: 'Телефон обязателен' });
     if (!username) return res.status(400).json({ error: 'Логин обязателен' });
     if (!password) return res.status(400).json({ error: 'Пароль обязателен' });
     if (!req.file) return res.status(400).json({ error: 'Аватар обязателен' });
@@ -160,54 +167,54 @@ app.post('/api/auth/register', upload.single('avatar'), async (req, res) => {
     if (password.length < 6) {
         return res.status(400).json({ error: 'Пароль должен быть минимум 6 символов' });
     }
-    if (!phone.match(/^\+?[0-9]{10,15}$/)) {
-        return res.status(400).json({ error: 'Неверный формат телефона' });
-    }
 
     try {
         const hashedPass = await bcrypt.hash(password, 10);
-        const userId = uuidv4();
         const displayName = name || username;
         const avatarPath = `/uploads/avatars/${req.file.filename}`;
 
-        db.run(
-            `INSERT INTO users (id, phone, username, password, name, avatar, bio, is_online, created_at, last_seen)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, phone, username, hashedPass, displayName, avatarPath, 'Новый пользователь', 1, Date.now(), Date.now()],
-            (err) => {
-                if (err) {
-                    if (err.message.includes('UNIQUE')) {
-                        return res.status(400).json({ error: 'Телефон или логин уже заняты' });
+        // Генерируем ID
+        generateUserId((err, userId) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            db.run(
+                `INSERT INTO users (id, username, password, name, avatar, bio, is_online, created_at, last_seen)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, username, hashedPass, displayName, avatarPath, 'Новый пользователь', 1, Date.now(), Date.now()],
+                (err) => {
+                    if (err) {
+                        if (err.message.includes('UNIQUE')) {
+                            return res.status(400).json({ error: 'Логин уже занят' });
+                        }
+                        return res.status(500).json({ error: err.message });
                     }
-                    return res.status(500).json({ error: err.message });
+                    res.json({ 
+                        success: true, 
+                        user: { 
+                            id: userId, 
+                            username, 
+                            name: displayName, 
+                            avatar: avatarPath, 
+                            bio: 'Новый пользователь' 
+                        }
+                    });
                 }
-                res.json({ 
-                    success: true, 
-                    user: { 
-                        id: userId, 
-                        phone, 
-                        username, 
-                        name: displayName, 
-                        avatar: avatarPath, 
-                        bio: 'Новый пользователь' 
-                    }
-                });
-            }
-        );
+            );
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. ЛОГИН (по телефону или username)
+// 2. ЛОГИН (по username)
 app.post('/api/auth/login', (req, res) => {
-    const { login, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!login || !password) {
-        return res.status(400).json({ error: 'Логин/телефон и пароль обязательны' });
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Логин и пароль обязательны' });
     }
 
-    db.get('SELECT * FROM users WHERE username = ? OR phone = ?', [login, login], async (err, user) => {
+    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(400).json({ error: 'Пользователь не найден' });
 
@@ -220,7 +227,6 @@ app.post('/api/auth/login', (req, res) => {
             success: true, 
             user: { 
                 id: user.id, 
-                phone: user.phone,
                 username: user.username, 
                 name: user.name, 
                 avatar: user.avatar, 
@@ -231,12 +237,12 @@ app.post('/api/auth/login', (req, res) => {
     });
 });
 
-// 3. ПОИСК ПОЛЬЗОВАТЕЛЕЙ (только реальные, без Матвея)
+// 3. ПОИСК ПОЛЬЗОВАТЕЛЕЙ (по username или имени)
 app.get('/api/users/search/:query', (req, res) => {
     const { query } = req.params;
     db.all(
-        'SELECT id, phone, username, name, avatar, bio, is_online FROM users WHERE (username LIKE ? OR phone LIKE ? OR name LIKE ?) AND id != ?',
-        [`%${query}%`, `%${query}%`, `%${query}%`, 'matvey'],
+        'SELECT id, username, name, avatar, bio, is_online FROM users WHERE (username LIKE ? OR name LIKE ?) AND id != ?',
+        [`%${query}%`, `%${query}%`, 'matvey'],
         (err, users) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(users);
@@ -244,9 +250,9 @@ app.get('/api/users/search/:query', (req, res) => {
     );
 });
 
-// 4. ПОЛУЧЕНИЕ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (для добавления в группы, без Матвея)
+// 4. ПОЛУЧЕНИЕ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (для добавления в группы)
 app.get('/api/users', (req, res) => {
-    db.all('SELECT id, phone, username, name, avatar, bio, is_online FROM users WHERE id != ?', ['matvey'], (err, users) => {
+    db.all('SELECT id, username, name, avatar, bio, is_online FROM users WHERE id != ?', ['matvey'], (err, users) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(users);
     });
@@ -255,7 +261,7 @@ app.get('/api/users', (req, res) => {
 // 5. ПОЛУЧЕНИЕ ПРОФИЛЯ
 app.get('/api/users/:userId', (req, res) => {
     const { userId } = req.params;
-    db.get('SELECT id, phone, username, name, avatar, bio, is_online, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
+    db.get('SELECT id, username, name, avatar, bio, is_online, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
         res.json(user);
@@ -313,7 +319,7 @@ app.get('/api/contacts/:userId', (req, res) => {
     });
 });
 
-// 8. СОЗДАНИЕ ЧАТА (группа или личный)
+// 8. СОЗДАНИЕ ЧАТА
 app.post('/api/chats', (req, res) => {
     const { name, isGroup, members, creatorId, description } = req.body;
     if (!members || !members.length) return res.status(400).json({ error: 'Участники обязательны' });
@@ -334,7 +340,6 @@ app.post('/api/chats', (req, res) => {
             });
             stmt.finalize();
 
-            // Матвей автоматически добавляется в группы
             if (isGroup && !members.includes('matvey')) {
                 db.run('INSERT INTO chat_members (chat_id, user_id, is_admin, joined_at) VALUES (?, ?, ?, ?)',
                     [chatId, 'matvey', 0, Date.now()]);
@@ -400,7 +405,6 @@ app.post('/api/chats/:chatId/members', (req, res) => {
 app.delete('/api/chats/:chatId/members/:userId', (req, res) => {
     const { chatId, userId } = req.params;
     
-    // Нельзя удалить Матвея
     if (userId === 'matvey') {
         return res.status(400).json({ error: 'Нельзя удалить Матвея' });
     }
@@ -484,5 +488,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 UMAR сервер запущен на порту ${PORT}`);
-    console.log(`👤 Единственный предустановленный пользователь: Матвей (только в группах)`);
+    console.log(`👤 ID пользователей генерируются автоматически (00001, 00002, ...)`);
 });
