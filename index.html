@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>UMAR — мессенджер</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
     <!-- Водяной знак -->
@@ -14,73 +13,120 @@
     <!-- МОДАЛКА АВТОРИЗАЦИИ -->
     <div id="authModal" class="modal active">
         <div class="modal-content auth-modal">
-            <div class="modal-header">
-                <h2>UMAR</h2>
+            <div class="modal-header" style="justify-content: center; border-bottom: none;">
+                <h2 style="font-size: 32px;">UMAR</h2>
             </div>
-            <div class="settings-body" id="authBody">
-                <!-- Телефон -->
-                <div id="authPhoneStep">
-                    <div class="form-group">
-                        <label>Номер телефона</label>
-                        <input type="tel" id="authPhone" placeholder="+7 999 123 45 67" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+            <div class="settings-body" id="authBody" style="padding: 0 24px 24px;">
+                <!-- Шаг 1: Ввод контакта -->
+                <div id="authContactStep">
+                    <div style="text-align: center; color: #888; font-size: 14px; margin-bottom: 16px;">
+                        Введите номер телефона или email
                     </div>
-                    <button id="authRequestCodeBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Получить код</button>
+                    <div class="form-group">
+                        <label>Контакт</label>
+                        <input type="text" id="authContact" placeholder="+7 999 123 45 67 или email@example.com" 
+                               style="width:100%; padding:14px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 12px;">
+                        <button id="authPhoneBtn" class="auth-method-btn" style="flex:1; padding:12px; background:#2a2a2a; border:1px solid #444; border-radius:12px; color:#fff; cursor:pointer;">
+                            📱 Телефон
+                        </button>
+                        <button id="authEmailBtn" class="auth-method-btn" style="flex:1; padding:12px; background:#2a2a2a; border:1px solid #444; border-radius:12px; color:#fff; cursor:pointer;">
+                            ✉️ Email
+                        </button>
+                    </div>
+                    <button id="authRequestCodeBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">
+                        Получить код
+                    </button>
+                    
+                    <div style="margin-top: 16px; text-align: center; border-top: 1px solid #2a2a2a; padding-top: 16px;">
+                        <button id="authGoogleBtn" style="width:100%; padding:12px; background:#4285F4; border:none; border-radius:12px; color:#fff; font-weight:600; font-size:16px; cursor:pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span style="font-size:20px;">G</span> Войти через Google
+                        </button>
+                    </div>
+
                     <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
                         Уже есть аккаунт? <a href="#" id="switchToLogin" style="color:#FF8C00; text-decoration:none;">Войти</a>
                     </div>
                 </div>
 
-                <!-- Код подтверждения -->
+                <!-- Шаг 2: Код подтверждения -->
                 <div id="authCodeStep" style="display:none;">
-                    <div class="form-group">
-                        <label>Код из SMS</label>
-                        <input type="text" id="authCode" placeholder="Введите 6-значный код" maxlength="6" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                    <div style="text-align: center; color: #888; font-size: 14px; margin-bottom: 16px;">
+                        Введите код из SMS или почты
                     </div>
-                    <button id="authVerifyBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Подтвердить</button>
+                    <div class="form-group">
+                        <label>Код подтверждения</label>
+                        <input type="text" id="authCode" placeholder="Введите 6-значный код" maxlength="6" 
+                               style="width:100%; padding:14px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px; text-align:center; letter-spacing:8px;">
+                    </div>
+                    <div id="codeDisplay" style="text-align:center; color:#FF8C00; font-size:18px; font-weight:700; margin:8px 0; display:none;">
+                        Код: <span id="displayedCode"></span>
+                    </div>
+                    <button id="authVerifyBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">
+                        Подтвердить
+                    </button>
                     <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
-                        <a href="#" id="backToPhone" style="color:#FF8C00; text-decoration:none;">← Назад</a>
+                        <a href="#" id="backToContact" style="color:#FF8C00; text-decoration:none;">← Назад</a>
+                        <span style="margin:0 8px;">|</span>
+                        <a href="#" id="resendCode" style="color:#FF8C00; text-decoration:none;">Отправить снова</a>
                     </div>
                 </div>
 
-                <!-- Регистрация -->
+                <!-- Шаг 3: Регистрация -->
                 <div id="authRegisterStep" style="display:none;">
+                    <div style="text-align: center; color: #888; font-size: 14px; margin-bottom: 16px;">
+                        Создайте аккаунт
+                    </div>
                     <div class="form-group">
                         <label>Имя</label>
-                        <input type="text" id="regName" placeholder="Ваше имя" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                        <input type="text" id="regName" placeholder="Ваше имя" 
+                               style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
                     </div>
                     <div class="form-group" style="margin-top:10px;">
                         <label>Логин (username)</label>
-                        <input type="text" id="regUsername" placeholder="username" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                        <input type="text" id="regUsername" placeholder="username" 
+                               style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
                     </div>
                     <div class="form-group" style="margin-top:10px;">
                         <label>Пароль</label>
-                        <input type="password" id="regPassword" placeholder="Минимум 6 символов" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                        <input type="password" id="regPassword" placeholder="Минимум 6 символов" 
+                               style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
                     </div>
-                    <button id="authRegisterBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Зарегистрироваться</button>
+                    <button id="authRegisterBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">
+                        Зарегистрироваться
+                    </button>
                 </div>
 
-                <!-- Логин по паролю -->
+                <!-- Шаг 4: Логин по паролю -->
                 <div id="authLoginStep" style="display:none;">
+                    <div style="text-align: center; color: #888; font-size: 14px; margin-bottom: 16px;">
+                        Вход в аккаунт
+                    </div>
                     <div class="form-group">
-                        <label>Логин или телефон</label>
-                        <input type="text" id="loginUsername" placeholder="username или +7..." style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                        <label>Логин, телефон или email</label>
+                        <input type="text" id="loginUsername" placeholder="username, +7... или email" 
+                               style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
                     </div>
                     <div class="form-group" style="margin-top:10px;">
                         <label>Пароль</label>
-                        <input type="password" id="loginPassword" placeholder="Пароль" style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
+                        <input type="password" id="loginPassword" placeholder="Пароль" 
+                               style="width:100%; padding:12px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff; font-size:16px;">
                     </div>
-                    <button id="authLoginBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">Войти</button>
+                    <button id="authLoginBtn" style="width:100%; margin-top:12px; padding:14px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; font-size:16px; cursor:pointer;">
+                        Войти
+                    </button>
                     <div style="margin-top:12px; text-align:center; color:#888; font-size:14px;">
                         <a href="#" id="switchToRegister" style="color:#FF8C00; text-decoration:none;">Создать аккаунт</a>
                     </div>
                 </div>
 
-                <div id="authError" style="color:#ff6b6b; margin-top:12px; display:none; text-align:center;"></div>
+                <div id="authError" style="color:#ff6b6b; margin-top:12px; display:none; text-align:center; padding:8px; background:#2a1a1a; border-radius:8px;"></div>
             </div>
         </div>
     </div>
 
-    <!-- ОСНОВНОЙ ИНТЕРФЕЙС (скрыт до авторизации) -->
+    <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
     <div id="appContainer" class="app-container" style="display:none;">
         <!-- Левая панель -->
         <aside class="chats-panel" id="chatsPanel">
@@ -124,8 +170,55 @@
         </main>
     </div>
 
-    <!-- Остальные модалки (настройки, группа, поиск людей) -->
-    <!-- ... (остальные модалки из предыдущей версии) ... -->
+    <!-- Остальные модалки -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Настройки</h2>
+                <button id="closeSettings" class="close-btn">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="setting-item">
+                    <span>Тёмная тема</span>
+                    <label class="switch">
+                        <input type="checkbox" id="themeSwitch" checked>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span>Уведомления</span>
+                    <label class="switch">
+                        <input type="checkbox" id="notifSwitch" checked>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div class="setting-item" style="border-bottom: none; margin-top: 8px;">
+                    <span style="color: #888; font-size: 13px;">Версия 3.0 · UMAR</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка группы -->
+    <div id="groupModal" class="modal">
+        <div class="modal-content group-modal">
+            <div class="modal-header">
+                <h2>Создать группу</h2>
+                <button id="closeGroupModal" class="close-btn">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="form-group">
+                    <label>Название группы</label>
+                    <input type="text" id="groupNameInput" placeholder="Введите название..." style="width:100%; padding:10px; border-radius:12px; border:1px solid #333; background:#1e1e1e; color:#fff;">
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Выберите участников:</label>
+                    <div id="groupMembersList" style="max-height:200px; overflow-y:auto; margin-top:8px;"></div>
+                </div>
+                <button id="createGroupConfirm" style="width:100%; margin-top:16px; padding:12px; background:#FF8C00; border:none; border-radius:12px; color:#0A0A0A; font-weight:700; cursor:pointer;">Создать группу</button>
+            </div>
+        </div>
+    </div>
 
     <script src="config.js"></script>
     <script src="script.js"></script>
