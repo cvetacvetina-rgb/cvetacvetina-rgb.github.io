@@ -1,4 +1,4 @@
-// server.js — бэкенд UMAR (использует storage.js)
+// server.js — бэкенд UMAR
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
@@ -13,7 +13,7 @@ const storage = require('./storage');
 const app = express();
 const server = http.createServer(app);
 
-// ========== НАСТРОЙКА CORS ==========
+// CORS
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -22,12 +22,11 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ========== MIDDLEWARE ==========
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
-// ========== НАСТРОЙКА MULTER ДЛЯ АВАТАРОВ ==========
+// Multer для аватаров
 const multerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = './uploads/avatars';
@@ -48,35 +47,33 @@ const upload = multer({
         if (allowed.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Только изображения (JPEG, PNG, GIF, WEBP)'));
+            cb(new Error('Только изображения'));
         }
     }
 });
 
-// ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ==========
+// Инициализация БД
 (async () => {
     await storage.initDatabase();
     await storage.ensureMatvey();
-    console.log('✅ База данных инициализирована');
+    console.log('✅ База данных готова');
 })();
 
-// ========== API ЭНДПОИНТЫ ==========
+// === API ===
 
-// === 1. РЕГИСТРАЦИЯ ===
+// Регистрация
 app.post('/api/auth/register', upload.single('avatar'), async (req, res) => {
     try {
         const { username, password, name } = req.body;
-
-        if (!username) return res.status(400).json({ error: 'Логин обязателен' });
-        if (!password) return res.status(400).json({ error: 'Пароль обязателен' });
-        if (!req.file) return res.status(400).json({ error: 'Аватар обязателен' });
-        if (username.length < 3) return res.status(400).json({ error: 'Логин должен быть минимум 3 символа' });
-        if (password.length < 6) return res.status(400).json({ error: 'Пароль должен быть минимум 6 символов' });
+        if (!username || !password || !req.file) {
+            return res.status(400).json({ error: 'Все поля обязательны' });
+        }
+        if (username.length < 3) return res.status(400).json({ error: 'Логин минимум 3 символа' });
+        if (password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
 
         const avatarPath = `/uploads/avatars/${req.file.filename}`;
         const user = await storage.createUser(username, password, name, avatarPath);
-
-        console.log('✅ Пользователь создан:', user.id, user.username);
+        console.log('✅ Создан пользователь:', user.id);
         res.json({ success: true, user });
     } catch (err) {
         console.error('❌ Ошибка регистрации:', err.message);
@@ -87,24 +84,22 @@ app.post('/api/auth/register', upload.single('avatar'), async (req, res) => {
     }
 });
 
-// === 2. ЛОГИН ===
+// Логин
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
             return res.status(400).json({ error: 'Логин и пароль обязательны' });
         }
-
         const user = await storage.loginUser(username, password);
-        console.log('✅ Вход успешен:', user.id, user.username);
+        console.log('✅ Вход:', user.id);
         res.json({ success: true, user });
     } catch (err) {
-        console.error('❌ Ошибка входа:', err.message);
         res.status(400).json({ error: err.message });
     }
 });
 
-// === 3. ПОЛУЧЕНИЕ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ===
+// Получить всех пользователей
 app.get('/api/users', async (req, res) => {
     try {
         const users = await storage.getAllUsers();
@@ -114,128 +109,96 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
-// === 4. ПОИСК ПОЛЬЗОВАТЕЛЕЙ ===
+// Поиск
 app.get('/api/users/search/:query', async (req, res) => {
     try {
-        const { query } = req.params;
-        const users = await storage.searchUsers(query);
+        const users = await storage.searchUsers(req.params.query);
         res.json(users);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 5. ПОЛУЧЕНИЕ ПРОФИЛЯ ===
+// Профиль
 app.get('/api/users/:userId', async (req, res) => {
     try {
-        const { userId } = req.params;
-        const user = await storage.getUserById(userId);
-        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        const user = await storage.getUserById(req.params.userId);
+        if (!user) return res.status(404).json({ error: 'Не найден' });
         res.json(user);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 6. ОБНОВЛЕНИЕ ПРОФИЛЯ ===
-app.post('/api/users/profile', upload.single('avatar'), async (req, res) => {
-    try {
-        const { userId, name, bio } = req.body;
-        if (!userId) return res.status(400).json({ error: 'userId обязателен' });
-
-        const data = { name, bio };
-        if (req.file) {
-            data.avatar = `/uploads/avatars/${req.file.filename}`;
-        }
-
-        const result = await storage.updateProfile(userId, data);
-        res.json(result);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// === 7. КОНТАКТЫ — ДОБАВЛЕНИЕ ===
+// Контакты — добавить
 app.post('/api/contacts', async (req, res) => {
     try {
         const { userId, contactId } = req.body;
         if (!userId || !contactId) {
             return res.status(400).json({ error: 'ID обязательны' });
         }
-
-        const result = await storage.addContact(userId, contactId);
+        await storage.addContact(userId, contactId);
         console.log('✅ Контакт добавлен:', userId, '->', contactId);
-        res.json(result);
+        res.json({ success: true });
     } catch (err) {
-        console.error('❌ Ошибка добавления контакта:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 8. КОНТАКТЫ — ПОЛУЧЕНИЕ ===
+// Контакты — получить
 app.get('/api/contacts/:userId', async (req, res) => {
     try {
-        const { userId } = req.params;
-        const contacts = await storage.getContacts(userId);
+        const contacts = await storage.getContacts(req.params.userId);
         res.json(contacts);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 9. СОЗДАНИЕ ЧАТА ===
+// Создать чат
 app.post('/api/chats', async (req, res) => {
     try {
         const { name, isGroup, members, creatorId, description } = req.body;
         if (!members || !members.length) {
             return res.status(400).json({ error: 'Участники обязательны' });
         }
-
         const result = await storage.createChat(name, isGroup, members, creatorId, description);
-        console.log('✅ Чат создан:', result.chatId);
         res.json({ success: true, chatId: result.chatId });
     } catch (err) {
-        console.error('❌ Ошибка создания чата:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 10. ПОЛУЧЕНИЕ ЧАТОВ ПОЛЬЗОВАТЕЛЯ ===
+// Чаты пользователя
 app.get('/api/chats/:userId', async (req, res) => {
     try {
-        const { userId } = req.params;
-        const chats = await storage.getUserChats(userId);
+        const chats = await storage.getUserChats(req.params.userId);
         res.json(chats);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// === 11. ПОЛУЧЕНИЕ СООБЩЕНИЙ ===
+// Сообщения чата
 app.get('/api/messages/:chatId', async (req, res) => {
     try {
-        const { chatId } = req.params;
-        const messages = await storage.getMessages(chatId);
+        const messages = await storage.getMessages(req.params.chatId);
         res.json(messages);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// ========== SOCKET.IO ==========
+// === SOCKET.IO ===
 const io = socketIO(server, {
-    cors: {
-        origin: '*',
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
+    cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 const onlineUsers = new Set();
 
 io.on('connection', (socket) => {
     const userId = socket.handshake.query.userId;
-    console.log('🔌 Пользователь подключился:', userId);
+    console.log('🔌 Подключился:', userId);
 
     if (userId) {
         onlineUsers.add(userId);
@@ -243,20 +206,13 @@ io.on('connection', (socket) => {
         io.emit('user_status', { userId, status: 'online' });
     }
 
-    // === ОТПРАВКА СООБЩЕНИЯ ===
     socket.on('send_message', async (data) => {
         try {
             const { chatId, senderId, text, file, voice, replyTo } = data;
-            console.log('💬 Сообщение от', senderId, 'в чат', chatId);
-
-            // Сохраняем сообщение в БД
             const savedMsg = await storage.saveMessage(chatId, senderId, text, file, voice, replyTo);
-
-            // Получаем участников чата
             const members = await storage.getChatMembers(chatId);
 
-            // Отправляем всем участникам
-            const messageData = {
+            const msgData = {
                 id: savedMsg.id,
                 chatId: savedMsg.chatId,
                 senderId: savedMsg.senderId,
@@ -268,47 +224,33 @@ io.on('connection', (socket) => {
             };
 
             members.forEach(m => {
-                if (m !== senderId) {
-                    io.to(m).emit('new_message', messageData);
-                }
+                if (m !== senderId) io.to(m).emit('new_message', msgData);
             });
-
-            // Отправляем обратно отправителю
-            io.to(senderId).emit('message_sent', messageData);
-
+            io.to(senderId).emit('message_sent', msgData);
         } catch (err) {
-            console.error('❌ Ошибка отправки сообщения:', err.message);
             socket.emit('error', err.message);
         }
     });
 
-    // === ПЕЧАТАЕТ ===
     socket.on('typing', ({ chatId, userId }) => {
         storage.getChatMembers(chatId).then(members => {
             members.forEach(m => {
-                if (m !== userId) {
-                    io.to(m).emit('user_typing', { chatId, userId });
-                }
+                if (m !== userId) io.to(m).emit('user_typing', { chatId, userId });
             });
         });
     });
 
-    // === ОТКЛЮЧЕНИЕ ===
     socket.on('disconnect', () => {
         if (userId) {
             onlineUsers.delete(userId);
             storage.updateUserStatus(userId, false);
             io.emit('user_status', { userId, status: 'offline' });
-            console.log('🔌 Пользователь отключился:', userId);
+            console.log('🔌 Отключился:', userId);
         }
     });
 });
 
-// ========== ЗАПУСК ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 UMAR сервер запущен на порту ${PORT}`);
-    console.log(`📁 Папка uploads: ${__dirname}/uploads`);
-    console.log(`📋 База данных: ${__dirname}/umar.db`);
-    console.log(`🔗 API: http://localhost:${PORT}`);
+    console.log(`🚀 Сервер на порту ${PORT}`);
 });
