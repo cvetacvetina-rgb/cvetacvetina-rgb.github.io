@@ -1,8 +1,9 @@
-// script.js — логика UMAR (исправлен)
+// script.js — UMAR фронтенд (рабочая версия)
 (function() {
     'use strict';
 
-    console.log('🚀 UMAR script загружен');
+    const API_URL = 'https://cvetacvetina-rgb-github-io.onrender.com';
+    console.log('🔗 API_URL:', API_URL);
 
     let currentUser = null;
     let socket = null;
@@ -16,178 +17,35 @@
     const authModal = document.getElementById('authModal');
     const appContainer = document.getElementById('appContainer');
     const authError = document.getElementById('authError');
-
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // ========== БЭКЕНД URL ==========
-    const API_URL = 'https://cvetavetina-rgb-github-io.onrender.com';
-
-    console.log('🔗 API_URL:', API_URL);
-
-    // ========== ПРОВЕРКА СОЕДИНЕНИЯ ==========
+    // === Проверка соединения ===
     async function testConnection() {
         try {
-            console.log('🔄 Проверка соединения с сервером...');
             const res = await fetch(`${API_URL}/api/users`);
-            console.log('✅ Сервер доступен, статус:', res.status);
-            return true;
+            if (res.ok) {
+                console.log('✅ Сервер доступен');
+                return true;
+            }
+            throw new Error('Статус ' + res.status);
         } catch (err) {
             console.error('❌ Сервер НЕДОСТУПЕН:', err.message);
-            showError('Не удалось подключиться к серверу. Проверьте URL: ' + API_URL);
+            showError('Не удалось подключиться к серверу: ' + API_URL);
             return false;
         }
     }
 
-    // ========== ПЕРЕКЛЮЧЕНИЕ ШАГОВ ==========
+    // === Шаги ===
     function showStep(step) {
-        [registerStep, loginStep].forEach(el => {
-            if (el) el.style.display = 'none';
-        });
+        [registerStep, loginStep].forEach(el => el.style.display = 'none');
         if (step) step.style.display = 'block';
         if (authError) authError.style.display = 'none';
     }
 
-    // ========== РЕГИСТРАЦИЯ ==========
-    const registerBtn = document.getElementById('authRegisterBtn');
-    if (registerBtn) {
-        registerBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            console.log('🖱️ Клик по кнопке регистрации');
-
-            const isConnected = await testConnection();
-            if (!isConnected) return;
-
-            const username = document.getElementById('regUsername').value.trim();
-            const name = document.getElementById('regName').value.trim() || username;
-            const password = document.getElementById('regPassword').value.trim();
-            const avatarFile = document.getElementById('regAvatar').files[0];
-
-            console.log('📝 Данные:', { username, name, password: password ? '****' : '', avatarFile: avatarFile ? avatarFile.name : 'нет' });
-
-            if (!username) {
-                showError('Введите логин');
-                return;
-            }
-            if (username.length < 3) {
-                showError('Логин должен быть минимум 3 символа');
-                return;
-            }
-            if (!password) {
-                showError('Введите пароль');
-                return;
-            }
-            if (password.length < 6) {
-                showError('Пароль должен быть минимум 6 символов');
-                return;
-            }
-            if (!avatarFile) {
-                showError('Загрузите аватар');
-                return;
-            }
-
-            try {
-                const formData = new FormData();
-                formData.append('username', username);
-                formData.append('name', name);
-                formData.append('password', password);
-                formData.append('avatar', avatarFile);
-
-                console.log('📤 Отправка запроса на регистрацию...');
-
-                const res = await fetch(`${API_URL}/api/auth/register`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await res.json();
-                console.log('📦 Данные ответа:', data);
-
-                if (data.success) {
-                    currentUser = data.user;
-                    console.log('✅ Регистрация успешна!', currentUser);
-                    authModal.classList.remove('active');
-                    authModal.style.display = 'none';
-                    appContainer.style.display = 'flex';
-                    initApp();
-                } else {
-                    showError(data.error || 'Ошибка регистрации');
-                }
-            } catch (err) {
-                console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
-            }
-        });
-    }
-
-    // ========== ВХОД ==========
-    const loginBtn = document.getElementById('authLoginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            console.log('🖱️ Клик по кнопке входа');
-
-            const isConnected = await testConnection();
-            if (!isConnected) return;
-
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-
-            console.log('📝 Данные входа:', { username, password: password ? '****' : '' });
-
-            if (!username || !password) {
-                showError('Заполните все поля');
-                return;
-            }
-
-            try {
-                console.log('📤 Отправка запроса на вход...');
-
-                const res = await fetch(`${API_URL}/api/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await res.json();
-                console.log('📦 Данные ответа:', data);
-
-                if (data.success) {
-                    currentUser = data.user;
-                    console.log('✅ Вход успешен!', currentUser);
-                    authModal.classList.remove('active');
-                    authModal.style.display = 'none';
-                    appContainer.style.display = 'flex';
-                    initApp();
-                } else {
-                    showError(data.error || 'Ошибка входа');
-                }
-            } catch (err) {
-                console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
-            }
-        });
-    }
-
-    // Enter для отправки форм
-    document.getElementById('regPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authRegisterBtn').click();
-    });
-    document.getElementById('loginPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authLoginBtn').click();
-    });
-
-    document.getElementById('switchToLogin').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(loginStep);
-    });
-    document.getElementById('switchToRegister').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(registerStep);
-    });
-
+    // === Ошибки ===
     function showError(msg) {
-        console.log('⚠️ Ошибка:', msg);
+        console.error('⚠️', msg);
         if (authError) {
             authError.textContent = msg;
             authError.style.display = 'block';
@@ -196,39 +54,102 @@
         }
     }
 
-    // ========== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ==========
-    async function initApp() {
-        console.log('🚀 Инициализация приложения...');
+    // === РЕГИСТРАЦИЯ ===
+    document.getElementById('authRegisterBtn').addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (!await testConnection()) return;
+
+        const username = document.getElementById('regUsername').value.trim();
+        const name = document.getElementById('regName').value.trim() || username;
+        const password = document.getElementById('regPassword').value.trim();
+        const avatarFile = document.getElementById('regAvatar').files[0];
+
+        if (!username || username.length < 3) return showError('Логин должен быть минимум 3 символа');
+        if (!password || password.length < 6) return showError('Пароль должен быть минимум 6 символов');
+        if (!avatarFile) return showError('Загрузите аватар');
+
         try {
-            // Подключаем Socket.IO
-            socket = io(API_URL, {
-                query: { userId: currentUser.id },
-                transports: ['websocket', 'polling']
-            });
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('name', name);
+            formData.append('password', password);
+            formData.append('avatar', avatarFile);
 
-            await loadChats();
-            await loadContacts();
-            await loadAllUsers();
-            setupSocket();
-            renderChatList();
-            openDefaultChat();
+            const res = await fetch(`${API_URL}/api/auth/register`, { method: 'POST', body: formData });
+            const data = await res.json();
 
-            document.getElementById('findPeopleBtn').addEventListener('click', openFindPeople);
-            console.log('✅ Приложение готово!');
+            if (data.success) {
+                currentUser = data.user;
+                authModal.style.display = 'none';
+                appContainer.style.display = 'flex';
+                initApp();
+            } else {
+                showError(data.error || 'Ошибка регистрации');
+            }
         } catch (err) {
-            console.error('❌ Ошибка инициализации:', err);
-            showError('Ошибка инициализации: ' + err.message);
+            showError('Ошибка: ' + err.message);
         }
+    });
+
+    // === ВХОД ===
+    document.getElementById('authLoginBtn').addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (!await testConnection()) return;
+
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+
+        if (!username || !password) return showError('Заполните все поля');
+
+        try {
+            const res = await fetch(`${API_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                currentUser = data.user;
+                authModal.style.display = 'none';
+                appContainer.style.display = 'flex';
+                initApp();
+            } else {
+                showError(data.error || 'Ошибка входа');
+            }
+        } catch (err) {
+            showError('Ошибка: ' + err.message);
+        }
+    });
+
+    // === Переключение ===
+    document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); showStep(loginStep); });
+    document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showStep(registerStep); });
+
+    // Enter
+    document.getElementById('regPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('authRegisterBtn').click(); });
+    document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('authLoginBtn').click(); });
+
+    // === ИНИЦИАЛИЗАЦИЯ ===
+    async function initApp() {
+        socket = io(API_URL, { query: { userId: currentUser.id }, transports: ['websocket', 'polling'] });
+
+        await loadChats();
+        await loadContacts();
+        await loadAllUsers();
+        setupSocket();
+        renderChatList();
+        openDefaultChat();
+
+        document.getElementById('findPeopleBtn').addEventListener('click', openFindPeople);
     }
 
-    // ========== НАСТРОЙКА SOCKET ==========
+    // === SOCKET ===
     function setupSocket() {
-        // Новое сообщение
         socket.on('new_message', (data) => {
-            console.log('📩 Новое сообщение получено:', data);
             const chat = chats.find(c => c.id === data.chatId);
             if (chat) {
-                const msg = {
+                chat.messages.push({
                     id: data.id,
                     text: data.text,
                     time: new Date(data.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
@@ -237,48 +158,28 @@
                     file: data.file,
                     voice: data.voice,
                     replyTo: data.replyTo
-                };
-                chat.messages.push(msg);
-                if (activeChatId === chat.id) {
-                    renderMessages(activeChatId);
-                }
+                });
+                if (activeChatId === chat.id) renderMessages(activeChatId);
                 renderChatList();
             }
         });
 
-        // Сообщение отправлено (подтверждение)
-        socket.on('message_sent', (data) => {
-            console.log('✅ Сообщение отправлено:', data);
-            // Обновляем последнее сообщение в списке чатов
-            renderChatList();
-        });
+        socket.on('message_sent', () => renderChatList());
 
-        // Статус пользователя
         socket.on('user_status', ({ userId, status }) => {
-            console.log('🔄 Статус пользователя:', userId, status);
-            // Обновляем статус в чатах
-            chats.forEach(chat => {
-                if (chat.id === userId) {
-                    chat.status = status;
-                }
-            });
-            // Обновляем в списке всех пользователей
+            chats.forEach(chat => { if (chat.id === userId) chat.status = status; });
             const user = allUsers.find(u => u.id === userId);
             if (user) user.is_online = status === 'online' ? 1 : 0;
             renderChatList();
             if (activeChatId) renderMessages(activeChatId);
         });
 
-        // Печатает
         socket.on('user_typing', ({ chatId, userId }) => {
-            if (activeChatId === chatId) {
-                // Можно показать индикатор печати
-                console.log('✏️ Пользователь печатает:', userId);
-            }
+            if (activeChatId === chatId) console.log('✏️ Пользователь печатает:', userId);
         });
     }
 
-    // ========== ЗАГРУЗКА ЧАТОВ ==========
+    // === ЗАГРУЗКА ДАННЫХ ===
     async function loadChats() {
         try {
             const res = await fetch(`${API_URL}/api/chats/${currentUser.id}`);
@@ -312,37 +213,30 @@
                     edited: m.is_edited === 1
                 }));
             }
-            console.log('📚 Загружено чатов:', chats.length);
         } catch (err) {
             console.error('Ошибка загрузки чатов:', err);
         }
     }
 
-    // ========== ЗАГРУЗКА КОНТАКТОВ ==========
     async function loadContacts() {
         try {
             const res = await fetch(`${API_URL}/api/contacts/${currentUser.id}`);
             contacts = await res.json();
-            console.log('👥 Загружено контактов:', contacts.length);
-            return contacts;
         } catch (err) {
             console.error('Ошибка загрузки контактов:', err);
-            return [];
         }
     }
 
-    // ========== ЗАГРУЗКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ==========
     async function loadAllUsers() {
         try {
             const res = await fetch(`${API_URL}/api/users`);
             allUsers = await res.json();
-            console.log('👤 Загружено пользователей:', allUsers.length);
         } catch (err) {
             console.error('Ошибка загрузки пользователей:', err);
         }
     }
 
-    // ========== ПОИСК ЛЮДЕЙ ==========
+    // === ПОИСК ЛЮДЕЙ ===
     function openFindPeople() {
         const query = prompt('🔍 Введите имя или логин для поиска:');
         if (!query) return;
@@ -350,15 +244,10 @@
         fetch(`${API_URL}/api/users/search/${encodeURIComponent(query)}`)
             .then(res => res.json())
             .then(users => {
-                if (users.length === 0) {
-                    alert('Пользователи не найдены');
-                    return;
-                }
+                if (!users.length) return alert('Пользователи не найдены');
                 let msg = 'Найдены пользователи:\n\n';
-                users.forEach((u, i) => {
-                    msg += `${i+1}. ${u.name} (@${u.username}) ID: ${u.id} ${u.is_online ? '🟢' : '⚫'}\n`;
-                });
-                const choice = prompt(msg + '\nВведите номер для добавления в контакты (или отмена):');
+                users.forEach((u, i) => msg += `${i+1}. ${u.name} (@${u.username}) ID: ${u.id} ${u.is_online ? '🟢' : '⚫'}\n`);
+                const choice = prompt(msg + '\nВведите номер для добавления в контакты:');
                 if (choice) {
                     const idx = parseInt(choice) - 1;
                     if (idx >= 0 && idx < users.length) {
@@ -369,31 +258,25 @@
                             body: JSON.stringify({ userId: currentUser.id, contactId: user.id })
                         }).then(async () => {
                             alert(`@${user.username} добавлен в контакты!`);
-                            // ОБНОВЛЯЕМ КОНТАКТЫ БЕЗ ПЕРЕЗАГРУЗКИ
                             await loadContacts();
                             renderChatList();
                         });
                     }
                 }
             })
-            .catch(err => alert('Ошибка поиска: ' + err.message));
+            .catch(err => alert('Ошибка: ' + err.message));
     }
 
-    // ========== ОТРИСОВКА СПИСКА ЧАТОВ ==========
+    // === ОТРИСОВКА ===
     function renderChatList() {
         const query = searchQuery.toLowerCase().trim();
-        let filtered = chats;
-        if (query) {
-            filtered = chats.filter(c => c.name.toLowerCase().includes(query));
-        }
+        let filtered = query ? chats.filter(c => c.name.toLowerCase().includes(query)) : chats;
 
         chatListEl.innerHTML = '';
         filtered.forEach(chat => {
             const lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length-1] : null;
             let lastText = lastMsg ? lastMsg.text : 'Нет сообщений';
-            if (lastMsg && lastMsg.senderId === 'matvey') {
-                lastText = 'Матвей: ' + lastText.split('\n')[0];
-            }
+            if (lastMsg && lastMsg.senderId === 'matvey') lastText = 'Матвей: ' + lastText.split('\n')[0];
             const lastTime = lastMsg ? lastMsg.time : '';
             const unread = chat.unread || 0;
 
@@ -437,7 +320,7 @@
         });
     }
 
-    // ========== ОТРИСОВКА СООБЩЕНИЙ ==========
+    // === СООБЩЕНИЯ ===
     function renderMessages(chatId) {
         const chat = chats.find(c => c.id === chatId);
         if (!chat) return;
@@ -447,30 +330,20 @@
             const bubble = document.createElement('div');
             const isSent = msg.type === 'sent';
             bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
-            bubble.dataset.messageId = msg.id;
 
             let senderName = '';
             if (chat.isGroup && msg.senderId && msg.senderId !== 'system' && msg.senderId !== 'matvey') {
                 const sender = allUsers.find(u => u.id === msg.senderId);
                 senderName = (sender ? sender.name : msg.senderId) + ': ';
             }
-            if (msg.senderId === 'matvey') {
-                senderName = 'Матвей: ';
-            }
+            if (msg.senderId === 'matvey') senderName = 'Матвей: ';
 
             let content = senderName + msg.text;
-            if (msg.file) {
-                content += `<div class="file-attach">📎 ${msg.file}</div>`;
-            }
-            if (msg.voice) {
-                content += `<div class="voice-player"><audio controls src="${msg.voice}"></audio></div>`;
-            }
+            if (msg.file) content += `<div class="file-attach">📎 ${msg.file}</div>`;
+            if (msg.voice) content += `<div class="voice-player"><audio controls src="${msg.voice}"></audio></div>`;
 
-            // ===== АКТИВАЦИОННЫЙ ТЕКСТ НА НОВОЙ СТРОКЕ =====
-            if (!msg.voice && !msg.file) {
-                if (!content.includes('Активация UMAR')) {
-                    content += `<span class="activation-line">Активация UMAR: Чтобы активировать UMAR, заплатити 50 халяли</span>`;
-                }
+            if (!msg.voice && !msg.file && !content.includes('Активация UMAR')) {
+                content += `<span class="activation-line">Активация UMAR: Чтобы активировать UMAR, заплатити 50 халяли</span>`;
             }
 
             content += ` <span class="time">${msg.time}</span>`;
@@ -479,7 +352,7 @@
         });
         messagesArea.scrollTop = messagesArea.scrollHeight;
 
-        // Обновляем хедер
+        // Хедер
         headerName.textContent = chat.name;
         if (chat.isGroup) {
             headerStatus.textContent = `👥 ${chat.members.length} участников`;
@@ -497,7 +370,7 @@
         }
     }
 
-    // ========== ОТКРЫТЬ ЧАТ ==========
+    // === ОТКРЫТЬ ЧАТ ===
     function openChat(chatId) {
         const chat = chats.find(c => c.id === chatId);
         if (!chat) return;
@@ -510,7 +383,7 @@
         renderMessages(chatId);
     }
 
-    // ========== ОТПРАВКА СООБЩЕНИЯ ==========
+    // === ОТПРАВКА СООБЩЕНИЯ ===
     function sendMessage(text, file = null, voiceBlob = null) {
         if (!activeChatId) return;
         const chat = chats.find(c => c.id === activeChatId);
@@ -522,14 +395,11 @@
         const now = new Date();
         const timeStr = now.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
-        // ===== АКТИВАЦИОННЫЙ ТЕКСТ НА НОВОЙ СТРОКЕ =====
-        if (!voiceBlob && !file) {
-            if (!finalText.includes('Активация UMAR')) {
-                finalText = finalText + '\nАктивация UMAR: Чтобы активировать UMAR, заплатити 50 халяли';
-            }
+        if (!voiceBlob && !file && !finalText.includes('Активация UMAR')) {
+            finalText = finalText + '\nАктивация UMAR: Чтобы активировать UMAR, заплатити 50 халяли';
         }
 
-        let msgObj = {
+        const msgObj = {
             id: Date.now().toString(),
             text: finalText,
             time: timeStr,
@@ -543,7 +413,6 @@
         renderMessages(activeChatId);
         renderChatList();
 
-        // Отправляем на сервер
         socket.emit('send_message', {
             chatId: chat.id,
             senderId: currentUser.id,
@@ -553,7 +422,7 @@
         });
     }
 
-    // ========== DOM ЭЛЕМЕНТЫ ==========
+    // === DOM ===
     const chatListEl = document.getElementById('chatList');
     const messagesArea = document.getElementById('messagesArea');
     const headerName = document.getElementById('headerName');
@@ -579,7 +448,7 @@
     const profileModal = document.getElementById('profileModal');
     const closeProfile = document.getElementById('closeProfile');
 
-    // Отправка сообщения
+    // === ОБРАБОТЧИКИ ===
     sendBtn.addEventListener('click', () => {
         const text = messageInput.value.trim();
         if (text) {
@@ -595,20 +464,17 @@
         }
     });
 
-    // Поиск
     searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value;
         renderChatList();
     });
 
-    // Настройки
     settingsToggle.addEventListener('click', () => settingsModal.classList.add('active'));
     closeSettings.addEventListener('click', () => settingsModal.classList.remove('active'));
     settingsModal.addEventListener('click', (e) => {
         if (e.target === settingsModal) settingsModal.classList.remove('active');
     });
 
-    // Тема
     themeSwitch.addEventListener('change', function() {
         if (!this.checked) {
             alert('Ты что, расист?');
@@ -618,7 +484,6 @@
         document.body.classList.remove('light-theme');
     });
 
-    // Файлы
     attachBtn.addEventListener('click', () => {
         if (!activeChatId) return;
         const input = document.createElement('input');
@@ -637,14 +502,9 @@
     let audioChunks = [];
 
     voiceBtn.addEventListener('click', async () => {
-        if (!activeChatId) {
-            alert('Сначала выберите чат');
-            return;
-        }
+        if (!activeChatId) return alert('Сначала выберите чат');
         if (isRecording) {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
             isRecording = false;
             voiceBtn.classList.remove('recording');
             voiceBtn.textContent = '🎤';
@@ -675,7 +535,7 @@
         }
     });
 
-    // ГРУППЫ
+    // === ГРУППЫ ===
     createGroupBtn.addEventListener('click', async () => {
         groupModal.classList.add('active');
         const res = await fetch(`${API_URL}/api/users`);
@@ -685,19 +545,13 @@
             if (u.id !== currentUser.id && u.id !== 'matvey') {
                 const div = document.createElement('div');
                 div.className = 'member-checkbox';
-                div.innerHTML = `
-                    <input type="checkbox" value="${u.id}">
-                    <span>${u.name} (@${u.username})</span>
-                `;
+                div.innerHTML = `<input type="checkbox" value="${u.id}"><span>${u.name} (@${u.username})</span>`;
                 groupMembersList.appendChild(div);
             }
         });
         const div = document.createElement('div');
         div.className = 'member-checkbox';
-        div.innerHTML = `
-            <input type="checkbox" checked disabled>
-            <span>Матвей (обязательный)</span>
-        `;
+        div.innerHTML = `<input type="checkbox" checked disabled><span>Матвей (обязательный)</span>`;
         groupMembersList.appendChild(div);
         groupNameInput.value = '';
     });
@@ -711,26 +565,16 @@
         const name = groupNameInput.value.trim() || 'Новая группа';
         const checkboxes = groupMembersList.querySelectorAll('input[type="checkbox"]:checked');
         const members = [currentUser.id];
-        checkboxes.forEach(cb => {
-            if (cb.value) members.push(cb.value);
-        });
+        checkboxes.forEach(cb => { if (cb.value) members.push(cb.value); });
         if (!members.includes('matvey')) members.push('matvey');
 
-        if (members.length < 3) {
-            alert('В группе должно быть минимум 3 участника (включая вас и Матвея)');
-            return;
-        }
+        if (members.length < 3) return alert('В группе должно быть минимум 3 участника');
 
         try {
             const res = await fetch(`${API_URL}/api/chats`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    isGroup: true,
-                    members: members,
-                    creatorId: currentUser.id
-                })
+                body: JSON.stringify({ name, isGroup: true, members, creatorId: currentUser.id })
             });
             const data = await res.json();
             if (data.success) {
@@ -745,7 +589,6 @@
         }
     });
 
-    // НАСТРОЙКИ ГРУППЫ
     groupSettingsBtn.addEventListener('click', () => {
         if (!activeChatId) return;
         const chat = chats.find(c => c.id === activeChatId);
@@ -764,7 +607,7 @@
         }
     });
 
-    // ========== ПРОФИЛЬ ==========
+    // === ПРОФИЛЬ ===
     function openProfile(userId) {
         const targetId = userId || currentUser.id;
         fetch(`${API_URL}/api/users/${targetId}`)
@@ -805,19 +648,13 @@
         if (e.target === profileModal) profileModal.classList.remove('active');
     });
 
-    // ========== ОТКРЫТЬ ПЕРВЫЙ ЧАТ ==========
+    // === ОТКРЫТЬ ПЕРВЫЙ ЧАТ ===
     function openDefaultChat() {
-        if (chats.length > 0) {
-            openChat(chats[0].id);
-        }
+        if (chats.length > 0) openChat(chats[0].id);
     }
 
-    // ========== ЗАПУСК ==========
-    console.log('📌 Показываем шаг регистрации');
+    // === ЗАПУСК ===
     showStep(registerStep);
-    console.log('📱 UMAR готов к работе');
-    console.log('🔗 Бэкенд:', API_URL);
-
     testConnection();
 
 })();
