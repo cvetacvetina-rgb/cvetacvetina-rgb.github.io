@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const API_URL = 'https://cvetacvetina-rgb-github-io.onrender.com';
+    const API_URL = 'https://cvetavetina-rgb-github-io.onrender.com';
     console.log('🔗 API_URL:', API_URL);
 
     let currentUser = null;
@@ -20,15 +20,14 @@
     const registerStep = document.getElementById('authRegisterStep');
     const loginStep = document.getElementById('authLoginStep');
 
-    // === Проверка соединения ===
+    // === ПРОВЕРКА СОЕДИНЕНИЯ ===
     async function testConnection() {
         try {
-            const res = await fetch(`${API_URL}/api/users`);
-            if (res.ok) {
-                console.log('✅ Сервер доступен');
-                return true;
-            }
-            throw new Error('Статус ' + res.status);
+            console.log('🔄 Проверка соединения...');
+            const res = await fetch(`${API_URL}/api/test`);
+            const data = await res.json();
+            console.log('✅ Сервер доступен:', data);
+            return true;
         } catch (err) {
             console.error('❌ Сервер НЕДОСТУПЕН:', err.message);
             showError('Не удалось подключиться к серверу: ' + API_URL);
@@ -36,14 +35,14 @@
         }
     }
 
-    // === Шаги ===
+    // === ШАГИ ===
     function showStep(step) {
         [registerStep, loginStep].forEach(el => el.style.display = 'none');
         if (step) step.style.display = 'block';
         if (authError) authError.style.display = 'none';
     }
 
-    // === Ошибки ===
+    // === ОШИБКИ ===
     function showError(msg) {
         console.error('⚠️', msg);
         if (authError) {
@@ -122,11 +121,10 @@
         }
     });
 
-    // === Переключение ===
+    // === ПЕРЕКЛЮЧЕНИЕ ===
     document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); showStep(loginStep); });
     document.getElementById('switchToRegister').addEventListener('click', (e) => { e.preventDefault(); showStep(registerStep); });
 
-    // Enter
     document.getElementById('regPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('authRegisterBtn').click(); });
     document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('authLoginBtn').click(); });
 
@@ -172,10 +170,6 @@
             if (user) user.is_online = status === 'online' ? 1 : 0;
             renderChatList();
             if (activeChatId) renderMessages(activeChatId);
-        });
-
-        socket.on('user_typing', ({ chatId, userId }) => {
-            if (activeChatId === chatId) console.log('✏️ Пользователь печатает:', userId);
         });
     }
 
@@ -352,7 +346,6 @@
         });
         messagesArea.scrollTop = messagesArea.scrollHeight;
 
-        // Хедер
         headerName.textContent = chat.name;
         if (chat.isGroup) {
             headerStatus.textContent = `👥 ${chat.members.length} участников`;
@@ -496,7 +489,7 @@
         input.click();
     });
 
-    // Голос
+    // === ГОЛОС ===
     let isRecording = false;
     let mediaRecorder = null;
     let audioChunks = [];
