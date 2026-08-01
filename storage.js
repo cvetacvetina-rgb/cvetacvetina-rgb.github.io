@@ -1,136 +1,87 @@
-// storage.js — отдельный модуль для работы с базой данных
+// storage.js — работа с базой данных
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
-// ========== ПОДКЛЮЧЕНИЕ К БАЗЕ ==========
-const db = new sqlite3.Database('./umar.db', (err) => {
-    if (err) {
-        console.error('❌ Ошибка подключения к БД:', err.message);
-    } else {
-        console.log('✅ База данных подключена');
-    }
-});
+const db = new sqlite3.Database('./umar.db');
 
-// ========== ИНИЦИАЛИЗАЦИЯ ТАБЛИЦ ==========
+// Инициализация таблиц
 function initDatabase() {
     return new Promise((resolve, reject) => {
         db.serialize(() => {
-            // Пользователи
-            db.run(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT UNIQUE,
-                    password TEXT,
-                    name TEXT,
-                    avatar TEXT,
-                    bio TEXT,
-                    last_seen INTEGER,
-                    is_online INTEGER DEFAULT 0,
-                    created_at INTEGER
-                )
-            `, (err) => {
-                if (err) console.error('❌ Ошибка создания users:', err);
-            });
-
-            // Чаты
-            db.run(`
-                CREATE TABLE IF NOT EXISTS chats (
-                    id TEXT PRIMARY KEY,
-                    name TEXT,
-                    is_group INTEGER DEFAULT 0,
-                    avatar TEXT,
-                    color TEXT,
-                    description TEXT,
-                    created_at INTEGER
-                )
-            `, (err) => {
-                if (err) console.error('❌ Ошибка создания chats:', err);
-            });
-
-            // Участники чатов
-            db.run(`
-                CREATE TABLE IF NOT EXISTS chat_members (
-                    chat_id TEXT,
-                    user_id TEXT,
-                    is_admin INTEGER DEFAULT 0,
-                    joined_at INTEGER,
-                    PRIMARY KEY (chat_id, user_id)
-                )
-            `, (err) => {
-                if (err) console.error('❌ Ошибка создания chat_members:', err);
-            });
-
-            // Сообщения
-            db.run(`
-                CREATE TABLE IF NOT EXISTS messages (
-                    id TEXT PRIMARY KEY,
-                    chat_id TEXT,
-                    sender_id TEXT,
-                    text TEXT,
-                    file TEXT,
-                    voice TEXT,
-                    reply_to TEXT,
-                    is_edited INTEGER DEFAULT 0,
-                    created_at INTEGER,
-                    FOREIGN KEY (chat_id) REFERENCES chats(id),
-                    FOREIGN KEY (sender_id) REFERENCES users(id)
-                )
-            `, (err) => {
-                if (err) console.error('❌ Ошибка создания messages:', err);
-            });
-
-            // Контакты
-            db.run(`
-                CREATE TABLE IF NOT EXISTS contacts (
-                    user_id TEXT,
-                    contact_id TEXT,
-                    created_at INTEGER,
-                    PRIMARY KEY (user_id, contact_id),
-                    FOREIGN KEY (user_id) REFERENCES users(id),
-                    FOREIGN KEY (contact_id) REFERENCES users(id)
-                )
-            `, (err) => {
-                if (err) console.error('❌ Ошибка создания contacts:', err);
-            });
-
-            console.log('✅ Все таблицы созданы/проверены');
+            db.run(`CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE,
+                password TEXT,
+                name TEXT,
+                avatar TEXT,
+                bio TEXT,
+                last_seen INTEGER,
+                is_online INTEGER DEFAULT 0,
+                created_at INTEGER
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS chats (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                is_group INTEGER DEFAULT 0,
+                avatar TEXT,
+                color TEXT,
+                description TEXT,
+                created_at INTEGER
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS chat_members (
+                chat_id TEXT,
+                user_id TEXT,
+                is_admin INTEGER DEFAULT 0,
+                joined_at INTEGER,
+                PRIMARY KEY (chat_id, user_id)
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                chat_id TEXT,
+                sender_id TEXT,
+                text TEXT,
+                file TEXT,
+                voice TEXT,
+                reply_to TEXT,
+                is_edited INTEGER DEFAULT 0,
+                created_at INTEGER
+            )`);
+            db.run(`CREATE TABLE IF NOT EXISTS contacts (
+                user_id TEXT,
+                contact_id TEXT,
+                created_at INTEGER,
+                PRIMARY KEY (user_id, contact_id)
+            )`);
+            console.log('✅ Таблицы созданы');
             resolve();
         });
     });
 }
 
-// ========== ПОЛЬЗОВАТЕЛИ ==========
-
-// Регистрация пользователя
+// Регистрация
 function createUser(username, password, name, avatarPath) {
     return new Promise((resolve, reject) => {
-        // Генерируем ID
         db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
             if (err) return reject(err);
             const userId = String((row.count || 0) + 1).padStart(5, '0');
 
             bcrypt.hash(password, 10, (err, hashedPass) => {
                 if (err) return reject(err);
-
-                const displayName = name || username;
-                const bio = 'Новый пользователь';
                 const now = Date.now();
 
                 db.run(
                     `INSERT INTO users (id, username, password, name, avatar, bio, is_online, created_at, last_seen)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [userId, username, hashedPass, displayName, avatarPath, bio, 1, now, now],
+                    [userId, username, hashedPass, name || username, avatarPath, 'Новый пользователь', 1, now, now],
                     function(err) {
                         if (err) return reject(err);
                         resolve({
                             id: userId,
                             username: username,
-                            name: displayName,
+                            name: name || username,
                             avatar: avatarPath,
-                            bio: bio,
+                            bio: 'Новый пользователь',
                             is_online: 1
                         });
                     }
@@ -140,7 +91,7 @@ function createUser(username, password, name, avatarPath) {
     });
 }
 
-// Логин пользователя
+// Логин
 function loginUser(username, password) {
     return new Promise((resolve, reject) => {
         db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
@@ -151,28 +102,16 @@ function loginUser(username, password) {
                 if (err) return reject(err);
                 if (!valid) return reject(new Error('Неверный пароль'));
 
-                // Обновляем статус онлайн
                 db.run('UPDATE users SET is_online = 1, last_seen = ? WHERE id = ?', [Date.now(), user.id]);
-
                 resolve({
                     id: user.id,
                     username: user.username,
                     name: user.name,
                     avatar: user.avatar,
                     bio: user.bio,
-                    is_online: user.is_online
+                    is_online: 1
                 });
             });
-        });
-    });
-}
-
-// Получить пользователя по ID
-function getUserById(userId) {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT id, username, name, avatar, bio, is_online, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
-            if (err) return reject(err);
-            resolve(user);
         });
     });
 }
@@ -201,52 +140,39 @@ function searchUsers(query) {
     });
 }
 
-// Обновить профиль
-function updateProfile(userId, data) {
+// Получить пользователя по ID
+function getUserById(userId) {
     return new Promise((resolve, reject) => {
-        const updates = [];
-        const params = [];
-        if (data.name) { updates.push('name = ?'); params.push(data.name); }
-        if (data.bio !== undefined) { updates.push('bio = ?'); params.push(data.bio); }
-        if (data.avatar) { updates.push('avatar = ?'); params.push(data.avatar); }
-
-        if (updates.length === 0) return resolve({ success: true });
-
-        params.push(userId);
-        db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params, (err) => {
+        db.get('SELECT id, username, name, avatar, bio, is_online, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
             if (err) return reject(err);
-            resolve({ success: true });
+            resolve(user);
         });
     });
 }
 
-// Обновить статус пользователя
+// Обновить статус
 function updateUserStatus(userId, isOnline) {
     return new Promise((resolve, reject) => {
         db.run('UPDATE users SET is_online = ?, last_seen = ? WHERE id = ?', [isOnline ? 1 : 0, Date.now(), userId], (err) => {
             if (err) return reject(err);
-            resolve({ success: true });
+            resolve();
         });
     });
 }
 
-// ========== КОНТАКТЫ ==========
-
-// Добавить контакт
+// КОНТАКТЫ
 function addContact(userId, contactId) {
     return new Promise((resolve, reject) => {
-        db.run(
-            'INSERT OR IGNORE INTO contacts (user_id, contact_id, created_at) VALUES (?, ?, ?)',
+        db.run('INSERT OR IGNORE INTO contacts (user_id, contact_id, created_at) VALUES (?, ?, ?)',
             [userId, contactId, Date.now()],
             function(err) {
                 if (err) return reject(err);
-                resolve({ success: true, changes: this.changes });
+                resolve({ success: true });
             }
         );
     });
 }
 
-// Получить контакты пользователя
 function getContacts(userId) {
     return new Promise((resolve, reject) => {
         db.all(`
@@ -261,31 +187,25 @@ function getContacts(userId) {
     });
 }
 
-// ========== ЧАТЫ ==========
-
-// Создать чат
+// ЧАТЫ
 function createChat(name, isGroup, members, creatorId, description = '') {
     return new Promise((resolve, reject) => {
         const chatId = uuidv4();
         const color = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-        const avatar = isGroup ? '👥' : '👤';
 
         db.run(
             `INSERT INTO chats (id, name, is_group, avatar, color, description, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [chatId, name || (isGroup ? 'Группа' : members[0]), isGroup ? 1 : 0, avatar, color, description || '', Date.now()],
+            [chatId, name || (isGroup ? 'Группа' : members[0]), isGroup ? 1 : 0, isGroup ? '👥' : '👤', color, description || '', Date.now()],
             function(err) {
                 if (err) return reject(err);
 
-                // Добавляем участников
                 const stmt = db.prepare('INSERT INTO chat_members (chat_id, user_id, is_admin, joined_at) VALUES (?, ?, ?, ?)');
                 members.forEach(m => {
-                    const isAdmin = m === creatorId ? 1 : 0;
-                    stmt.run(chatId, m, isAdmin, Date.now());
+                    stmt.run(chatId, m, m === creatorId ? 1 : 0, Date.now());
                 });
                 stmt.finalize();
 
-                // Матвей автоматически в группы
                 if (isGroup && !members.includes('matvey')) {
                     db.run('INSERT INTO chat_members (chat_id, user_id, is_admin, joined_at) VALUES (?, ?, ?, ?)',
                         [chatId, 'matvey', 0, Date.now()]);
@@ -297,7 +217,6 @@ function createChat(name, isGroup, members, creatorId, description = '') {
     });
 }
 
-// Получить чаты пользователя
 function getUserChats(userId) {
     return new Promise((resolve, reject) => {
         db.all(`
@@ -315,24 +234,7 @@ function getUserChats(userId) {
     });
 }
 
-// Получить сообщения чата
-function getMessages(chatId, limit = 100) {
-    return new Promise((resolve, reject) => {
-        db.all(`
-            SELECT m.*, u.name as sender_name, u.avatar as sender_avatar
-            FROM messages m
-            LEFT JOIN users u ON u.id = m.sender_id
-            WHERE m.chat_id = ?
-            ORDER BY m.created_at ASC
-            LIMIT ?
-        `, [chatId, limit], (err, messages) => {
-            if (err) return reject(err);
-            resolve(messages);
-        });
-    });
-}
-
-// Сохранить сообщение
+// СООБЩЕНИЯ
 function saveMessage(chatId, senderId, text, file = null, voice = null, replyTo = null) {
     return new Promise((resolve, reject) => {
         const msgId = uuidv4();
@@ -359,7 +261,22 @@ function saveMessage(chatId, senderId, text, file = null, voice = null, replyTo 
     });
 }
 
-// Получить участников чата
+function getMessages(chatId) {
+    return new Promise((resolve, reject) => {
+        db.all(`
+            SELECT m.*, u.name as sender_name, u.avatar as sender_avatar
+            FROM messages m
+            LEFT JOIN users u ON u.id = m.sender_id
+            WHERE m.chat_id = ?
+            ORDER BY m.created_at ASC
+            LIMIT 100
+        `, [chatId], (err, messages) => {
+            if (err) return reject(err);
+            resolve(messages);
+        });
+    });
+}
+
 function getChatMembers(chatId) {
     return new Promise((resolve, reject) => {
         db.all('SELECT user_id FROM chat_members WHERE chat_id = ?', [chatId], (err, members) => {
@@ -369,9 +286,7 @@ function getChatMembers(chatId) {
     });
 }
 
-// ========== МАТВЕЙ ==========
-
-// Создать Матвея (если не существует)
+// МАТВЕЙ
 function ensureMatvey() {
     return new Promise((resolve, reject) => {
         db.get('SELECT * FROM users WHERE id = ?', ['matvey'], (err, row) => {
@@ -392,23 +307,20 @@ function ensureMatvey() {
     });
 }
 
-// ========== ЭКСПОРТ ==========
 module.exports = {
     initDatabase,
     createUser,
     loginUser,
-    getUserById,
     getAllUsers,
     searchUsers,
-    updateProfile,
+    getUserById,
     updateUserStatus,
     addContact,
     getContacts,
     createChat,
     getUserChats,
-    getMessages,
     saveMessage,
+    getMessages,
     getChatMembers,
-    ensureMatvey,
-    db
+    ensureMatvey
 };
