@@ -1,812 +1,520 @@
-// script.js — логика UMAR (рабочая версия)
-(function() {
-    'use strict';
+// server.js — бэкенд UMAR (полностью рабочий)
+const express = require('express');
+const http = require('http');
+const socketIO = require('socket.io');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 
-    console.log('🚀 UMAR script загружен');
+const app = express();
+const server = http.createServer(app);
 
-    let currentUser = null;
-    let socket = null;
-    let chats = [];
-    let activeChatId = null;
-    let searchQuery = '';
-    let allUsers = [];
-    let contacts = [];
+// ========== НАСТРОЙКА CORS ==========
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
+app.options('*', cors());
 
-    // DOM
-    const authModal = document.getElementById('authModal');
-    const appContainer = document.getElementById('appContainer');
-    const authError = document.getElementById('authError');
+// ========== MIDDLEWARE ==========
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 
-    const registerStep = document.getElementById('authRegisterStep');
-    const loginStep = document.getElementById('authLoginStep');
+// ========== ЛОГИРОВАНИЕ ==========
+app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.url}`);
+    next();
+});
 
-    // ========== БЭКЕНД URL ==========
-    const API_URL = 'https://cvetavetina-rgb-github-io.onrender.com';
-
-    console.log('🔗 API_URL:', API_URL);
-
-    // ========== ПРОВЕРКА СОЕДИНЕНИЯ ==========
-    async function testConnection() {
-        try {
-            console.log('🔄 Проверка соединения с сервером...');
-            const res = await fetch(`${API_URL}/api/users`);
-            console.log('✅ Сервер доступен, статус:', res.status);
-            return true;
-        } catch (err) {
-            console.error('❌ Сервер НЕДОСТУПЕН:', err.message);
-            showError('Не удалось подключиться к серверу. Проверьте URL: ' + API_URL);
-            return false;
-        }
+// ========== НАСТРОЙКА MULTER ДЛЯ АВАТАРОВ ==========
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = './uploads/avatars';
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     }
+});
 
-    // ========== ПЕРЕКЛЮЧЕНИЕ ШАГОВ ==========
-    function showStep(step) {
-        [registerStep, loginStep].forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-        if (step) step.style.display = 'block';
-        if (authError) authError.style.display = 'none';
-    }
-
-    // ========== РЕГИСТРАЦИЯ ==========
-    const registerBtn = document.getElementById('authRegisterBtn');
-    if (registerBtn) {
-        registerBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            console.log('🖱️ Клик по кнопке регистрации');
-
-            const isConnected = await testConnection();
-            if (!isConnected) return;
-
-            const username = document.getElementById('regUsername').value.trim();
-            const name = document.getElementById('regName').value.trim() || username;
-            const password = document.getElementById('regPassword').value.trim();
-            const avatarFile = document.getElementById('regAvatar').files[0];
-
-            console.log('📝 Данные:', { username, name, password: password ? '****' : '', avatarFile: avatarFile ? avatarFile.name : 'нет' });
-
-            if (!username) {
-                showError('Введите логин');
-                return;
-            }
-            if (username.length < 3) {
-                showError('Логин должен быть минимум 3 символа');
-                return;
-            }
-            if (!password) {
-                showError('Введите пароль');
-                return;
-            }
-            if (password.length < 6) {
-                showError('Пароль должен быть минимум 6 символов');
-                return;
-            }
-            if (!avatarFile) {
-                showError('Загрузите аватар');
-                return;
-            }
-
-            try {
-                const formData = new FormData();
-                formData.append('username', username);
-                formData.append('name', name);
-                formData.append('password', password);
-                formData.append('avatar', avatarFile);
-
-                console.log('📤 Отправка запроса на регистрацию...');
-
-                const res = await fetch(`${API_URL}/api/auth/register`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await res.json();
-                console.log('📦 Данные ответа:', data);
-
-                if (data.success) {
-                    currentUser = data.user;
-                    console.log('✅ Регистрация успешна!', currentUser);
-                    authModal.classList.remove('active');
-                    authModal.style.display = 'none';
-                    appContainer.style.display = 'flex';
-                    initApp();
-                } else {
-                    showError(data.error || 'Ошибка регистрации');
-                }
-            } catch (err) {
-                console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
-            }
-        });
-    }
-
-    // ========== ВХОД ==========
-    const loginBtn = document.getElementById('authLoginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            console.log('🖱️ Клик по кнопке входа');
-
-            const isConnected = await testConnection();
-            if (!isConnected) return;
-
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-
-            console.log('📝 Данные входа:', { username, password: password ? '****' : '' });
-
-            if (!username || !password) {
-                showError('Заполните все поля');
-                return;
-            }
-
-            try {
-                console.log('📤 Отправка запроса на вход...');
-
-                const res = await fetch(`${API_URL}/api/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await res.json();
-                console.log('📦 Данные ответа:', data);
-
-                if (data.success) {
-                    currentUser = data.user;
-                    console.log('✅ Вход успешен!', currentUser);
-                    authModal.classList.remove('active');
-                    authModal.style.display = 'none';
-                    appContainer.style.display = 'flex';
-                    initApp();
-                } else {
-                    showError(data.error || 'Ошибка входа');
-                }
-            } catch (err) {
-                console.error('❌ Ошибка:', err);
-                showError('Ошибка соединения с сервером: ' + err.message);
-            }
-        });
-    }
-
-    // Enter для отправки форм
-    document.getElementById('regPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authRegisterBtn').click();
-    });
-    document.getElementById('loginPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('authLoginBtn').click();
-    });
-
-    document.getElementById('switchToLogin').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(loginStep);
-    });
-    document.getElementById('switchToRegister').addEventListener('click', (e) => {
-        e.preventDefault();
-        showStep(registerStep);
-    });
-
-    function showError(msg) {
-        console.log('⚠️ Ошибка:', msg);
-        if (authError) {
-            authError.textContent = msg;
-            authError.style.display = 'block';
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
         } else {
-            alert(msg);
+            cb(new Error('Только изображения (JPEG, PNG, GIF, WEBP)'));
         }
     }
+});
 
-    // ========== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ==========
-    async function initApp() {
-        console.log('🚀 Инициализация приложения...');
-        try {
-            socket = io(API_URL, {
-                query: { userId: currentUser.id },
-                transports: ['websocket', 'polling']
-            });
+// ========== ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ ==========
+const db = new sqlite3.Database('./umar.db');
 
-            await loadChats();
-            await loadContacts();
-            await loadAllUsers();
-            setupSocket();
-            renderChatList();
-            openDefaultChat();
+// ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ==========
+db.serialize(() => {
+    // Пользователи
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE,
+            password TEXT,
+            name TEXT,
+            avatar TEXT,
+            bio TEXT,
+            last_seen INTEGER,
+            is_online INTEGER DEFAULT 0,
+            created_at INTEGER
+        )
+    `);
 
-            document.getElementById('findPeopleBtn').addEventListener('click', openFindPeople);
-            console.log('✅ Приложение готово!');
-        } catch (err) {
-            console.error('❌ Ошибка инициализации:', err);
-            showError('Ошибка инициализации: ' + err.message);
+    // Чаты
+    db.run(`
+        CREATE TABLE IF NOT EXISTS chats (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            is_group INTEGER DEFAULT 0,
+            avatar TEXT,
+            color TEXT,
+            description TEXT,
+            created_at INTEGER
+        )
+    `);
+
+    // Участники чатов
+    db.run(`
+        CREATE TABLE IF NOT EXISTS chat_members (
+            chat_id TEXT,
+            user_id TEXT,
+            is_admin INTEGER DEFAULT 0,
+            joined_at INTEGER,
+            PRIMARY KEY (chat_id, user_id)
+        )
+    `);
+
+    // Сообщения
+    db.run(`
+        CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            chat_id TEXT,
+            sender_id TEXT,
+            text TEXT,
+            file TEXT,
+            voice TEXT,
+            reply_to TEXT,
+            is_edited INTEGER DEFAULT 0,
+            created_at INTEGER,
+            FOREIGN KEY (chat_id) REFERENCES chats(id),
+            FOREIGN KEY (sender_id) REFERENCES users(id)
+        )
+    `);
+
+    // Контакты
+    db.run(`
+        CREATE TABLE IF NOT EXISTS contacts (
+            user_id TEXT,
+            contact_id TEXT,
+            created_at INTEGER,
+            PRIMARY KEY (user_id, contact_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (contact_id) REFERENCES users(id)
+        )
+    `);
+
+    // СОЗДАЁМ МАТВЕЯ
+    db.get('SELECT * FROM users WHERE id = ?', ['matvey'], (err, row) => {
+        if (!row) {
+            const hashedPass = bcrypt.hashSync('matvey123', 10);
+            db.run(`
+                INSERT INTO users (id, username, password, name, avatar, bio, is_online, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                'matvey',
+                'matvey',
+                hashedPass,
+                'Матвей',
+                '/uploads/avatars/matvey.png',
+                'Казино-бот 🎰',
+                1,
+                Date.now()
+            ]);
+            console.log('✅ Матвей создан');
         }
+    });
+});
+
+// ========== ГЕНЕРАЦИЯ ID ==========
+function generateUserId(callback) {
+    db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
+        if (err) return callback(err);
+        const count = row.count;
+        const userId = String(count + 1).padStart(5, '0');
+        callback(null, userId);
+    });
+}
+
+// ========== API ЭНДПОИНТЫ ==========
+
+// === 1. РЕГИСТРАЦИЯ ===
+app.post('/api/auth/register', upload.single('avatar'), async (req, res) => {
+    console.log('📝 Регистрация запрос получен');
+    console.log('📦 Body:', req.body);
+    console.log('📎 Файл:', req.file);
+
+    const { username, password, name } = req.body;
+
+    // Валидация
+    if (!username) return res.status(400).json({ error: 'Логин обязателен' });
+    if (!password) return res.status(400).json({ error: 'Пароль обязателен' });
+    if (!req.file) return res.status(400).json({ error: 'Аватар обязателен' });
+
+    if (username.length < 3) {
+        return res.status(400).json({ error: 'Логин должен быть минимум 3 символа' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Пароль должен быть минимум 6 символов' });
     }
 
-    // ========== НАСТРОЙКА SOCKET ==========
-    function setupSocket() {
-        socket.on('new_message', (data) => {
-            console.log('📩 Новое сообщение получено:', data);
-            const chat = chats.find(c => c.id === data.chatId);
-            if (chat) {
-                const msg = {
-                    id: data.id,
-                    text: data.text,
-                    time: new Date(data.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-                    type: 'received',
-                    senderId: data.senderId,
-                    file: data.file,
-                    voice: data.voice,
-                    replyTo: data.replyTo
-                };
-                chat.messages.push(msg);
-                if (activeChatId === chat.id) {
-                    renderMessages(activeChatId);
-                }
-                renderChatList();
+    try {
+        const hashedPass = await bcrypt.hash(password, 10);
+        const displayName = name || username;
+        const avatarPath = `/uploads/avatars/${req.file.filename}`;
+
+        generateUserId((err, userId) => {
+            if (err) {
+                console.error('❌ Ошибка генерации ID:', err);
+                return res.status(500).json({ error: err.message });
             }
-        });
 
-        socket.on('message_sent', (data) => {
-            console.log('✅ Сообщение отправлено:', data);
-            renderChatList();
-        });
+            console.log('🆔 Сгенерирован ID:', userId);
 
-        socket.on('user_status', ({ userId, status }) => {
-            console.log('🔄 Статус пользователя:', userId, status);
-            chats.forEach(chat => {
-                if (chat.id === userId) {
-                    chat.status = status;
-                }
-            });
-            const user = allUsers.find(u => u.id === userId);
-            if (user) user.is_online = status === 'online' ? 1 : 0;
-            renderChatList();
-            if (activeChatId) renderMessages(activeChatId);
-        });
-
-        socket.on('user_typing', ({ chatId, userId }) => {
-            if (activeChatId === chatId) {
-                console.log('✏️ Пользователь печатает:', userId);
-            }
-        });
-    }
-
-    // ========== ЗАГРУЗКА ЧАТОВ ==========
-    async function loadChats() {
-        try {
-            const res = await fetch(`${API_URL}/api/chats/${currentUser.id}`);
-            const data = await res.json();
-            chats = data.map(c => ({
-                id: c.id,
-                name: c.name,
-                isGroup: c.is_group === 1,
-                members: JSON.parse(c.members || '[]'),
-                admins: JSON.parse(c.admins || '[]'),
-                avatar: c.avatar || '👤',
-                color: c.color || '#2a2a2a',
-                description: c.description || '',
-                status: 'online',
-                messages: [],
-                unread: 0
-            }));
-
-            for (const chat of chats) {
-                const msgsRes = await fetch(`${API_URL}/api/messages/${chat.id}`);
-                const msgs = await msgsRes.json();
-                chat.messages = msgs.map(m => ({
-                    id: m.id,
-                    text: m.text,
-                    time: new Date(m.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-                    type: m.sender_id === currentUser.id ? 'sent' : 'received',
-                    senderId: m.sender_id,
-                    file: m.file,
-                    voice: m.voice,
-                    replyTo: m.reply_to,
-                    edited: m.is_edited === 1
-                }));
-            }
-            console.log('📚 Загружено чатов:', chats.length);
-        } catch (err) {
-            console.error('Ошибка загрузки чатов:', err);
-        }
-    }
-
-    // ========== ЗАГРУЗКА КОНТАКТОВ ==========
-    async function loadContacts() {
-        try {
-            const res = await fetch(`${API_URL}/api/contacts/${currentUser.id}`);
-            contacts = await res.json();
-            console.log('👥 Загружено контактов:', contacts.length);
-            return contacts;
-        } catch (err) {
-            console.error('Ошибка загрузки контактов:', err);
-            return [];
-        }
-    }
-
-    // ========== ЗАГРУЗКА ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ==========
-    async function loadAllUsers() {
-        try {
-            const res = await fetch(`${API_URL}/api/users`);
-            allUsers = await res.json();
-            console.log('👤 Загружено пользователей:', allUsers.length);
-        } catch (err) {
-            console.error('Ошибка загрузки пользователей:', err);
-        }
-    }
-
-    // ========== ПОИСК ЛЮДЕЙ ==========
-    function openFindPeople() {
-        const query = prompt('🔍 Введите имя или логин для поиска:');
-        if (!query) return;
-
-        fetch(`${API_URL}/api/users/search/${encodeURIComponent(query)}`)
-            .then(res => res.json())
-            .then(users => {
-                if (users.length === 0) {
-                    alert('Пользователи не найдены');
-                    return;
-                }
-                let msg = 'Найдены пользователи:\n\n';
-                users.forEach((u, i) => {
-                    msg += `${i+1}. ${u.name} (@${u.username}) ID: ${u.id} ${u.is_online ? '🟢' : '⚫'}\n`;
-                });
-                const choice = prompt(msg + '\nВведите номер для добавления в контакты (или отмена):');
-                if (choice) {
-                    const idx = parseInt(choice) - 1;
-                    if (idx >= 0 && idx < users.length) {
-                        const user = users[idx];
-                        fetch(`${API_URL}/api/contacts`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUser.id, contactId: user.id })
-                        }).then(async () => {
-                            alert(`@${user.username} добавлен в контакты!`);
-                            await loadContacts();
-                            renderChatList();
-                        });
+            // СОХРАНЯЕМ В БАЗУ ДАННЫХ
+            db.run(
+                `INSERT INTO users (id, username, password, name, avatar, bio, is_online, created_at, last_seen)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, username, hashedPass, displayName, avatarPath, 'Новый пользователь', 1, Date.now(), Date.now()],
+                function(err) {
+                    if (err) {
+                        console.error('❌ Ошибка БД:', err);
+                        if (err.message.includes('UNIQUE')) {
+                            return res.status(400).json({ error: 'Логин уже занят' });
+                        }
+                        return res.status(500).json({ error: err.message });
                     }
+                    console.log('✅ Пользователь сохранён в БД! ID:', userId);
+                    // Возвращаем данные пользователя
+                    res.json({
+                        success: true,
+                        user: {
+                            id: userId,
+                            username: username,
+                            name: displayName,
+                            avatar: avatarPath,
+                            bio: 'Новый пользователь'
+                        }
+                    });
                 }
-            })
-            .catch(err => alert('Ошибка поиска: ' + err.message));
+            );
+        });
+    } catch (err) {
+        console.error('❌ Ошибка:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// === 2. ЛОГИН ===
+app.post('/api/auth/login', (req, res) => {
+    console.log('📝 Вход запрос получен');
+    console.log('📦 Body:', req.body);
+
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Логин и пароль обязательны' });
     }
 
-    // ========== ОТРИСОВКА СПИСКА ЧАТОВ ==========
-    function renderChatList() {
-        const query = searchQuery.toLowerCase().trim();
-        let filtered = chats;
-        if (query) {
-            filtered = chats.filter(c => c.name.toLowerCase().includes(query));
+    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
+        if (err) {
+            console.error('❌ Ошибка БД:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        if (!user) {
+            console.log('❌ Пользователь не найден:', username);
+            return res.status(400).json({ error: 'Пользователь не найден' });
         }
 
-        chatListEl.innerHTML = '';
-        filtered.forEach(chat => {
-            const lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length-1] : null;
-            let lastText = lastMsg ? lastMsg.text : 'Нет сообщений';
-            if (lastMsg && lastMsg.senderId === 'matvey') {
-                lastText = 'Матвей: ' + lastText.split('\n')[0];
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) {
+            console.log('❌ Неверный пароль для:', username);
+            return res.status(400).json({ error: 'Неверный пароль' });
+        }
+
+        // Обновляем статус онлайн
+        db.run('UPDATE users SET is_online = 1, last_seen = ? WHERE id = ?', [Date.now(), user.id]);
+
+        console.log('✅ Вход успешен:', username);
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                name: user.name,
+                avatar: user.avatar,
+                bio: user.bio,
+                is_online: user.is_online
             }
-            const lastTime = lastMsg ? lastMsg.time : '';
-            const unread = chat.unread || 0;
-
-            const div = document.createElement('div');
-            div.className = `chat-item ${activeChatId === chat.id ? 'active' : ''}`;
-            div.dataset.id = chat.id;
-
-            const avatarDiv = document.createElement('div');
-            avatarDiv.className = 'avatar';
-            avatarDiv.style.background = chat.color || '#2a2a2a';
-            avatarDiv.textContent = chat.isGroup ? '👥' : (chat.avatar || chat.name.charAt(0).toUpperCase());
-            if (!chat.isGroup) {
-                const dot = document.createElement('span');
-                dot.className = `status-dot ${chat.status === 'online' ? 'online' : 'offline'}`;
-                avatarDiv.appendChild(dot);
-            }
-
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'chat-info';
-            const nameSpan = document.createElement('div');
-            nameSpan.className = 'chat-name';
-            const statusText = chat.isGroup ? `👥 ${chat.members.length} уч.` : (chat.status === 'online' ? '🟢 онлайн' : '⚫ офлайн');
-            nameSpan.innerHTML = `${chat.isGroup ? '👥 ' : ''}${chat.name} <span class="status-text ${chat.status === 'online' ? 'online' : ''}">${statusText}</span>`;
-            const preview = document.createElement('div');
-            preview.className = 'last-preview';
-            preview.innerHTML = `${lastText} <span class="time">${lastTime}</span>`;
-            if (unread > 0) {
-                const badge = document.createElement('span');
-                badge.className = 'unread-badge';
-                badge.textContent = unread;
-                preview.appendChild(badge);
-            }
-            infoDiv.appendChild(nameSpan);
-            infoDiv.appendChild(preview);
-
-            div.appendChild(avatarDiv);
-            div.appendChild(infoDiv);
-            chatListEl.appendChild(div);
-
-            div.addEventListener('click', () => openChat(chat.id));
         });
+    });
+});
+
+// === 3. ПОЛУЧЕНИЕ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ===
+app.get('/api/users', (req, res) => {
+    db.all('SELECT id, username, name, avatar, bio, is_online FROM users WHERE id != ?', ['matvey'], (err, users) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(users);
+    });
+});
+
+// === 4. ПОИСК ПОЛЬЗОВАТЕЛЕЙ ===
+app.get('/api/users/search/:query', (req, res) => {
+    const { query } = req.params;
+    db.all(
+        'SELECT id, username, name, avatar, bio, is_online FROM users WHERE (username LIKE ? OR name LIKE ?) AND id != ?',
+        [`%${query}%`, `%${query}%`, 'matvey'],
+        (err, users) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(users);
+        }
+    );
+});
+
+// === 5. ПОЛУЧЕНИЕ ПРОФИЛЯ ===
+app.get('/api/users/:userId', (req, res) => {
+    const { userId } = req.params;
+    db.get('SELECT id, username, name, avatar, bio, is_online, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        res.json(user);
+    });
+});
+
+// === 6. КОНТАКТЫ — ДОБАВЛЕНИЕ ===
+app.post('/api/contacts', (req, res) => {
+    const { userId, contactId } = req.body;
+    console.log('📝 Добавление в контакты:', { userId, contactId });
+
+    if (!userId || !contactId) {
+        return res.status(400).json({ error: 'ID обязательны' });
     }
 
-    // ========== ОТРИСОВКА СООБЩЕНИЙ ==========
-    function renderMessages(chatId) {
-        const chat = chats.find(c => c.id === chatId);
-        if (!chat) return;
-        messagesArea.innerHTML = '';
-
-        chat.messages.forEach(msg => {
-            const bubble = document.createElement('div');
-            const isSent = msg.type === 'sent';
-            bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
-            bubble.dataset.messageId = msg.id;
-
-            let senderName = '';
-            if (chat.isGroup && msg.senderId && msg.senderId !== 'system' && msg.senderId !== 'matvey') {
-                const sender = allUsers.find(u => u.id === msg.senderId);
-                senderName = (sender ? sender.name : msg.senderId) + ': ';
+    db.run(
+        'INSERT OR IGNORE INTO contacts (user_id, contact_id, created_at) VALUES (?, ?, ?)',
+        [userId, contactId, Date.now()],
+        function(err) {
+            if (err) {
+                console.error('❌ Ошибка БД:', err);
+                return res.status(500).json({ error: err.message });
             }
-            if (msg.senderId === 'matvey') {
-                senderName = 'Матвей: ';
-            }
-
-            let content = senderName + msg.text;
-            if (msg.file) {
-                content += `<div class="file-attach">📎 ${msg.file}</div>`;
-            }
-            if (msg.voice) {
-                content += `<div class="voice-player"><audio controls src="${msg.voice}"></audio></div>`;
-            }
-
-            // Активационный текст на новой строке
-            if (!msg.voice && !msg.file) {
-                if (!content.includes('Активация UMAR')) {
-                    content += `<span class="activation-line">Активация UMAR: Чтобы активировать UMAR, заплатити 50 халяли</span>`;
-                }
-            }
-
-            content += ` <span class="time">${msg.time}</span>`;
-            bubble.innerHTML = content;
-            messagesArea.appendChild(bubble);
-        });
-        messagesArea.scrollTop = messagesArea.scrollHeight;
-
-        // Обновляем хедер
-        headerName.textContent = chat.name;
-        if (chat.isGroup) {
-            headerStatus.textContent = `👥 ${chat.members.length} участников`;
-            headerStatus.className = '';
-            headerAvatar.textContent = '👥';
-            headerAvatar.style.background = chat.color || '#6c5ce7';
-            groupSettingsBtn.style.display = 'flex';
-        } else {
-            const isOnline = chat.status === 'online';
-            headerStatus.textContent = isOnline ? '🟢 онлайн' : '⚫ офлайн';
-            headerStatus.className = isOnline ? 'online' : '';
-            headerAvatar.textContent = chat.avatar || chat.name.charAt(0).toUpperCase();
-            headerAvatar.style.background = chat.color || '#2a2a2a';
-            groupSettingsBtn.style.display = 'none';
+            console.log('✅ Контакт добавлен');
+            res.json({ success: true });
         }
+    );
+});
+
+// === 7. КОНТАКТЫ — ПОЛУЧЕНИЕ ===
+app.get('/api/contacts/:userId', (req, res) => {
+    const { userId } = req.params;
+    db.all(`
+        SELECT u.id, u.username, u.name, u.avatar, u.bio, u.is_online
+        FROM users u
+        JOIN contacts c ON c.contact_id = u.id
+        WHERE c.user_id = ?
+    `, [userId], (err, contacts) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(contacts);
+    });
+});
+
+// === 8. СОЗДАНИЕ ЧАТА ===
+app.post('/api/chats', (req, res) => {
+    const { name, isGroup, members, creatorId, description } = req.body;
+    console.log('📝 Создание чата:', { name, isGroup, members });
+
+    if (!members || !members.length) {
+        return res.status(400).json({ error: 'Участники обязательны' });
     }
 
-    // ========== ОТКРЫТЬ ЧАТ ==========
-    function openChat(chatId) {
-        const chat = chats.find(c => c.id === chatId);
-        if (!chat) return;
-        activeChatId = chatId;
-        chat.unread = 0;
-        messageInput.disabled = false;
-        sendBtn.disabled = false;
-        messageInput.focus();
-        renderChatList();
-        renderMessages(chatId);
-    }
+    const chatId = uuidv4();
+    const color = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
 
-    // ========== ОТПРАВКА СООБЩЕНИЯ ==========
-    function sendMessage(text, file = null, voiceBlob = null) {
-        if (!activeChatId) return;
-        const chat = chats.find(c => c.id === activeChatId);
-        if (!chat) return;
-
-        let finalText = text || '';
-        if (finalText.trim() === '' && !file && !voiceBlob) return;
-
-        const now = new Date();
-        const timeStr = now.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-
-        // Активационный текст на новой строке
-        if (!voiceBlob && !file) {
-            if (!finalText.includes('Активация UMAR')) {
-                finalText = finalText + '\nАктивация UMAR: Чтобы активировать UMAR, заплатити 50 халяли';
+    db.run(
+        `INSERT INTO chats (id, name, is_group, avatar, color, description, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [chatId, name || (isGroup ? 'Группа' : members[0]), isGroup ? 1 : 0, isGroup ? '👥' : '👤', color, description || '', Date.now()],
+        function(err) {
+            if (err) {
+                console.error('❌ Ошибка БД:', err);
+                return res.status(500).json({ error: err.message });
             }
-        }
 
-        let msgObj = {
-            id: Date.now().toString(),
-            text: finalText,
-            time: timeStr,
-            type: 'sent',
-            senderId: currentUser.id,
-            file: file || null,
-            voice: voiceBlob ? 'voice' : null
-        };
-
-        chat.messages.push(msgObj);
-        renderMessages(activeChatId);
-        renderChatList();
-
-        socket.emit('send_message', {
-            chatId: chat.id,
-            senderId: currentUser.id,
-            text: finalText,
-            file: file,
-            voice: voiceBlob ? 'voice' : null
-        });
-    }
-
-    // ========== DOM ЭЛЕМЕНТЫ ==========
-    const chatListEl = document.getElementById('chatList');
-    const messagesArea = document.getElementById('messagesArea');
-    const headerName = document.getElementById('headerName');
-    const headerStatus = document.getElementById('headerStatus');
-    const headerAvatar = document.getElementById('headerAvatar');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const searchInput = document.getElementById('searchInput');
-    const settingsToggle = document.getElementById('settingsToggle');
-    const settingsModal = document.getElementById('settingsModal');
-    const closeSettings = document.getElementById('closeSettings');
-    const themeSwitch = document.getElementById('themeSwitch');
-    const attachBtn = document.getElementById('attachBtn');
-    const voiceBtn = document.getElementById('voiceBtn');
-    const createGroupBtn = document.getElementById('createGroupBtn');
-    const groupModal = document.getElementById('groupModal');
-    const closeGroupModal = document.getElementById('closeGroupModal');
-    const groupNameInput = document.getElementById('groupNameInput');
-    const groupMembersList = document.getElementById('groupMembersList');
-    const createGroupConfirm = document.getElementById('createGroupConfirm');
-    const groupSettingsBtn = document.getElementById('groupSettingsBtn');
-    const profileBtn = document.getElementById('profileBtn');
-    const profileModal = document.getElementById('profileModal');
-    const closeProfile = document.getElementById('closeProfile');
-
-    // Отправка сообщения
-    sendBtn.addEventListener('click', () => {
-        const text = messageInput.value.trim();
-        if (text) {
-            sendMessage(text);
-            messageInput.value = '';
-        }
-    });
-
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendBtn.click();
-        }
-    });
-
-    // Поиск
-    searchInput.addEventListener('input', (e) => {
-        searchQuery = e.target.value;
-        renderChatList();
-    });
-
-    // Настройки
-    settingsToggle.addEventListener('click', () => settingsModal.classList.add('active'));
-    closeSettings.addEventListener('click', () => settingsModal.classList.remove('active'));
-    settingsModal.addEventListener('click', (e) => {
-        if (e.target === settingsModal) settingsModal.classList.remove('active');
-    });
-
-    // Тема
-    themeSwitch.addEventListener('change', function() {
-        if (!this.checked) {
-            alert('Ты что, расист?');
-            this.checked = true;
-            return;
-        }
-        document.body.classList.remove('light-theme');
-    });
-
-    // Файлы
-    attachBtn.addEventListener('click', () => {
-        if (!activeChatId) return;
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*,audio/*,video/*,.pdf,.doc,.docx,.txt';
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) sendMessage('', file.name, null);
-        };
-        input.click();
-    });
-
-    // Голос
-    let isRecording = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-
-    voiceBtn.addEventListener('click', async () => {
-        if (!activeChatId) {
-            alert('Сначала выберите чат');
-            return;
-        }
-        if (isRecording) {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
-            isRecording = false;
-            voiceBtn.classList.remove('recording');
-            voiceBtn.textContent = '🎤';
-            return;
-        }
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                if (audioBlob.size > 0) sendMessage('', null, audioBlob);
-                stream.getTracks().forEach(track => track.stop());
-                isRecording = false;
-                voiceBtn.classList.remove('recording');
-                voiceBtn.textContent = '🎤';
-            };
-
-            mediaRecorder.start();
-            isRecording = true;
-            voiceBtn.classList.add('recording');
-            voiceBtn.textContent = '⏹️';
-        } catch (err) {
-            alert('Не удалось получить доступ к микрофону: ' + err.message);
-        }
-    });
-
-    // ГРУППЫ
-    createGroupBtn.addEventListener('click', async () => {
-        groupModal.classList.add('active');
-        const res = await fetch(`${API_URL}/api/users`);
-        const users = await res.json();
-        groupMembersList.innerHTML = '';
-        users.forEach(u => {
-            if (u.id !== currentUser.id && u.id !== 'matvey') {
-                const div = document.createElement('div');
-                div.className = 'member-checkbox';
-                div.innerHTML = `
-                    <input type="checkbox" value="${u.id}">
-                    <span>${u.name} (@${u.username})</span>
-                `;
-                groupMembersList.appendChild(div);
-            }
-        });
-        const div = document.createElement('div');
-        div.className = 'member-checkbox';
-        div.innerHTML = `
-            <input type="checkbox" checked disabled>
-            <span>Матвей (обязательный)</span>
-        `;
-        groupMembersList.appendChild(div);
-        groupNameInput.value = '';
-    });
-
-    closeGroupModal.addEventListener('click', () => groupModal.classList.remove('active'));
-    groupModal.addEventListener('click', (e) => {
-        if (e.target === groupModal) groupModal.classList.remove('active');
-    });
-
-    createGroupConfirm.addEventListener('click', async () => {
-        const name = groupNameInput.value.trim() || 'Новая группа';
-        const checkboxes = groupMembersList.querySelectorAll('input[type="checkbox"]:checked');
-        const members = [currentUser.id];
-        checkboxes.forEach(cb => {
-            if (cb.value) members.push(cb.value);
-        });
-        if (!members.includes('matvey')) members.push('matvey');
-
-        if (members.length < 3) {
-            alert('В группе должно быть минимум 3 участника (включая вас и Матвея)');
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/api/chats`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    isGroup: true,
-                    members: members,
-                    creatorId: currentUser.id
-                })
+            // Добавляем участников
+            const stmt = db.prepare('INSERT INTO chat_members (chat_id, user_id, is_admin, joined_at) VALUES (?, ?, ?, ?)');
+            members.forEach(m => {
+                const isAdmin = m === creatorId ? 1 : 0;
+                stmt.run(chatId, m, isAdmin, Date.now());
             });
-            const data = await res.json();
-            if (data.success) {
-                groupModal.classList.remove('active');
-                await loadChats();
-                renderChatList();
-                const newChat = chats.find(c => c.id === data.chatId);
-                if (newChat) openChat(newChat.id);
-            }
-        } catch (err) {
-            alert('Ошибка создания группы: ' + err.message);
-        }
-    });
+            stmt.finalize();
 
-    // НАСТРОЙКИ ГРУППЫ
-    groupSettingsBtn.addEventListener('click', () => {
-        if (!activeChatId) return;
-        const chat = chats.find(c => c.id === activeChatId);
-        if (!chat || !chat.isGroup) return;
-        const newName = prompt('Название группы:', chat.name);
-        if (newName && newName.trim()) {
-            fetch(`${API_URL}/api/chats/${chat.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName.trim() })
-            }).then(() => {
-                chat.name = newName.trim();
-                renderChatList();
-                renderMessages(activeChatId);
+            // Матвей автоматически в группы
+            if (isGroup && !members.includes('matvey')) {
+                db.run('INSERT INTO chat_members (chat_id, user_id, is_admin, joined_at) VALUES (?, ?, ?, ?)',
+                    [chatId, 'matvey', 0, Date.now()]);
+            }
+
+            console.log('✅ Чат создан:', chatId);
+            res.json({ success: true, chatId });
+        }
+    );
+});
+
+// === 9. ПОЛУЧЕНИЕ ЧАТОВ ПОЛЬЗОВАТЕЛЯ ===
+app.get('/api/chats/:userId', (req, res) => {
+    const { userId } = req.params;
+    db.all(`
+        SELECT c.*,
+               (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
+               (SELECT json_group_array(user_id) FROM chat_members WHERE chat_id = c.id) as members,
+               (SELECT json_group_array(user_id) FROM chat_members WHERE chat_id = c.id AND is_admin = 1) as admins
+        FROM chats c
+        JOIN chat_members cm ON cm.chat_id = c.id
+        WHERE cm.user_id = ?
+    `, [userId], (err, chats) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(chats);
+    });
+});
+
+// === 10. ПОЛУЧЕНИЕ СООБЩЕНИЙ ===
+app.get('/api/messages/:chatId', (req, res) => {
+    const { chatId } = req.params;
+    db.all(`
+        SELECT m.*, u.name as sender_name, u.avatar as sender_avatar
+        FROM messages m
+        LEFT JOIN users u ON u.id = m.sender_id
+        WHERE m.chat_id = ?
+        ORDER BY m.created_at ASC
+        LIMIT 100
+    `, [chatId], (err, messages) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(messages);
+    });
+});
+
+// ========== SOCKET.IO ==========
+const io = socketIO(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
+
+const onlineUsers = new Set();
+
+io.on('connection', (socket) => {
+    const userId = socket.handshake.query.userId;
+    console.log('🔌 Пользователь подключился:', userId);
+
+    if (userId) {
+        onlineUsers.add(userId);
+        db.run('UPDATE users SET is_online = 1, last_seen = ? WHERE id = ?', [Date.now(), userId]);
+        io.emit('user_status', { userId, status: 'online' });
+    }
+
+    // === ОТПРАВКА СООБЩЕНИЯ ===
+    socket.on('send_message', async (data) => {
+        const { chatId, senderId, text, file, voice, replyTo } = data;
+        console.log('💬 Новое сообщение:', { chatId, senderId, text: text?.substring(0, 30) });
+
+        const msgId = uuidv4();
+
+        db.run(`
+            INSERT INTO messages (id, chat_id, sender_id, text, file, voice, reply_to, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [msgId, chatId, senderId, text || '', file || null, voice || null, replyTo || null, Date.now()],
+        function(err) {
+            if (err) {
+                console.error('❌ Ошибка сохранения сообщения:', err);
+                return socket.emit('error', err.message);
+            }
+
+            // Получаем участников чата и отправляем им сообщение
+            db.all('SELECT user_id FROM chat_members WHERE chat_id = ?', [chatId], (err, members) => {
+                if (err) return;
+
+                const messageData = {
+                    id: msgId,
+                    chatId: chatId,
+                    senderId: senderId,
+                    text: text || '',
+                    file: file || null,
+                    voice: voice || null,
+                    replyTo: replyTo || null,
+                    created_at: Date.now()
+                };
+
+                // Отправляем всем участникам, кроме отправителя
+                members.forEach(m => {
+                    if (m.user_id !== senderId) {
+                        io.to(m.user_id).emit('new_message', messageData);
+                    }
+                });
+
+                // Отправляем обратно отправителю для обновления его чата
+                io.to(senderId).emit('message_sent', messageData);
             });
-        }
+        });
     });
 
-    // ========== ПРОФИЛЬ ==========
-    function openProfile(userId) {
-        const targetId = userId || currentUser.id;
-        fetch(`${API_URL}/api/users/${targetId}`)
-            .then(res => res.json())
-            .then(user => {
-                document.getElementById('profileId').textContent = user.id;
-                document.getElementById('profileName').textContent = user.name;
-                document.getElementById('profileUsername').textContent = '@' + user.username;
-                document.getElementById('profileStatus').textContent = user.is_online ? '🟢 онлайн' : '⚫ офлайн';
-                document.getElementById('profileBio').textContent = user.bio || 'Новый пользователь';
-                const avatarEl = document.getElementById('profileAvatar');
-                if (user.avatar && user.avatar.startsWith('/uploads')) {
-                    avatarEl.innerHTML = `<img src="${API_URL}${user.avatar}" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">`;
-                } else {
-                    avatarEl.textContent = user.avatar || user.name.charAt(0).toUpperCase();
+    // === ПЕЧАТАЕТ ===
+    socket.on('typing', ({ chatId, userId }) => {
+        db.all('SELECT user_id FROM chat_members WHERE chat_id = ?', [chatId], (err, members) => {
+            if (err) return;
+            members.forEach(m => {
+                if (m.user_id !== userId) {
+                    io.to(m.user_id).emit('user_typing', { chatId, userId });
                 }
-                profileModal.classList.add('active');
-            })
-            .catch(err => alert('Ошибка загрузки профиля: ' + err.message));
-    }
-
-    profileBtn.addEventListener('click', () => {
-        if (activeChatId) {
-            const chat = chats.find(c => c.id === activeChatId);
-            if (chat && !chat.isGroup) {
-                const contactId = chat.members.find(m => m !== currentUser.id);
-                if (contactId) {
-                    openProfile(contactId);
-                    return;
-                }
-            }
-        }
-        openProfile(currentUser.id);
+            });
+        });
     });
 
-    closeProfile.addEventListener('click', () => profileModal.classList.remove('active'));
-    profileModal.addEventListener('click', (e) => {
-        if (e.target === profileModal) profileModal.classList.remove('active');
-    });
-
-    // ========== ОТКРЫТЬ ПЕРВЫЙ ЧАТ ==========
-    function openDefaultChat() {
-        if (chats.length > 0) {
-            openChat(chats[0].id);
+    // === ОТКЛЮЧЕНИЕ ===
+    socket.on('disconnect', () => {
+        if (userId) {
+            onlineUsers.delete(userId);
+            db.run('UPDATE users SET is_online = 0, last_seen = ? WHERE id = ?', [Date.now(), userId]);
+            io.emit('user_status', { userId, status: 'offline' });
+            console.log('🔌 Пользователь отключился:', userId);
         }
-    }
+    });
+});
 
-    // ========== ЗАПУСК ==========
-    console.log('📌 Показываем шаг регистрации');
-    showStep(registerStep);
-    console.log('📱 UMAR готов к работе');
-    console.log('🔗 Бэкенд:', API_URL);
-
-    testConnection();
-
-})();
+// ========== ЗАПУСК ==========
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 UMAR сервер запущен на порту ${PORT}`);
+    console.log(`📁 Папка uploads: ${__dirname}/uploads`);
+    console.log(`👤 Матвей создан (только в группах)`);
+    console.log(`📋 База данных: ${__dirname}/umar.db`);
+});
